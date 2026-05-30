@@ -5,10 +5,10 @@ import tempfile
 import copy
 import numpy as np
 import pandas as pd
-from linke.dataset.beam.data_processor import (
+from raine.dataset.beam.data_processor import (
     CsvInputData,
 )
-from linke.evaluation.beam.evaluator import (
+from raine.evaluation.beam.evaluator import (
     run_evaluation_pipeline,
     determine_blessing,
     EvalConfig,
@@ -56,7 +56,7 @@ class TestEvaluator:
         self.data_spec = DataSpec(
             input_data=CsvInputData(
                 # Not really doing anything
-                file="linke/tests/data/input.csv",
+                file="tests/data/input.csv",
                 batch_size=2,
             ),
             label_key="E",
@@ -71,17 +71,17 @@ class TestEvaluator:
         # Create metric from module_path
         self.metric_hit_ratio = MetricSpec(
             name="hit_ratio",
-            metric="linke.evaluation.beam.metrics.HitRatioTopK",
+            metric="raine.evaluation.beam.metrics.HitRatioTopK",
             config={"top_k": [1, 4, 5]},
         )
         self.metric_ndcg = MetricSpec(
             name="ndcg",
-            metric="linke.evaluation.beam.metrics.NDCGTopK",
+            metric="raine.evaluation.beam.metrics.NDCGTopK",
             config={"top_k": [1, 4, 5]},
         )
         self.metric_unqiue_count = MetricSpec(
             name="unique_count",
-            metric="linke.evaluation.beam.metrics.UniqueCountTopK",
+            metric="raine.evaluation.beam.metrics.UniqueCountTopK",
             config={"top_k": [1, 4, 5]},
         )
 
@@ -155,7 +155,7 @@ class TestEvaluator:
 
     # @pytest.mark.skip(reason="")
     def test_sliced_evaluation_pipeline(self):
-        data_path = "linke/tests/data/input.csv"
+        data_path = "tests/data/input.csv"
         data_spec = DataSpec(
             input_data=CsvInputData(
                 # Not really doing anything
@@ -221,7 +221,7 @@ class TestEvaluator:
                         assert np.allclose(expected, obtained)
 
     def test_sliced_evaluation_pipeline_keyed_combiner(self):
-        data_path = "linke/tests/data/input.csv"
+        data_path = "tests/data/input.csv"
         data_spec = DataSpec(
             input_data=CsvInputData(
                 # Not really doing anything

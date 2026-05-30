@@ -17,13 +17,13 @@ from typing import (
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 
-from linke.utils.beam_routines import CombineToJson
-from linke.dataset.beam.data_processor import (
+from raine.utils.beam_routines import CombineToJson
+from raine.dataset.beam.data_processor import (
     BaseInputData,
     BatchReader,
     DataProcessingDoFn,
 )
-from linke.evaluation.beam.metrics import (
+from raine.evaluation.beam.metrics import (
     BaseMetric,
     DEFAULT_FEATURE_KEY,
     DEFAULT_LABEL_KEY,

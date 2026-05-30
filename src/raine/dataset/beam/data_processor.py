@@ -32,7 +32,7 @@ from apache_beam.io.gcp.bigquery import (
 from apache_beam.io.tfrecordio import ReadFromTFRecord, WriteToTFRecord
 from apache_beam.io.parquetio import ReadFromParquet, WriteToParquet
 
-from linke.dataset.beam.utils import (
+from raine.dataset.beam.utils import (
     TFRecordIOUtils,
 )
 

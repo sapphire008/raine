@@ -2,7 +2,7 @@ from typing import Dict, Literal
 import functools
 import numpy as np
 
-from linke.dataset.beam import example_pb2
+from raine.dataset.beam import example_pb2
 
 
 # %% Reading and Writing TFRecords

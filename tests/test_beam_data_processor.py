@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 from apache_beam.io.tfrecordio import _TFRecordUtil
 from apache_beam.coders import BytesCoder
-from linke.runner.local_runner import LocalPipelineRunner
+from raine.runner.local_runner import LocalPipelineRunner
 # fmt: off
-from linke.dataset.beam.data_processor import (
+from raine.dataset.beam.data_processor import (
     run_data_processing_pipeline,
     CsvInputData, CsvOutputData,
     BigQueryInputData, BigQuerySchemaField, BigQueryOutputData,
@@ -20,21 +20,21 @@ from linke.dataset.beam.data_processor import (
     ParquetSchemaField, ParquetInputData, ParquetOutputData,
 )
 # fmt: on
-from linke.dataset.beam.components import (
+from raine.dataset.beam.components import (
     beam_data_processing_component,
 )
-from linke.dataset.beam.utils import (
+from raine.dataset.beam.utils import (
     TFRecordIOUtils,
 )
 from pdb import set_trace
 
 
 def test_csv_reader_writer():
-    input_file = "linke/tests/data/input.csv"
+    input_file = "tests/data/input.csv"
     processing_fn = (
-        "linke.tests.conftest.csv_processing_fn"
+        "tests.conftest.csv_processing_fn"
     )
-    setup_fn = "linke.tests.conftest.csv_setup_fn"
+    setup_fn = "tests.conftest.csv_setup_fn"
 
     with tempfile.TemporaryDirectory() as temp_dir:
         output_file = os.path.join(temp_dir, "output")
@@ -67,15 +67,15 @@ def test_csv_reader_writer():
 
 def test_beam_data_processing_single_component():
     """No input/output artifacts. Just static files linked"""
-    input_file = "linke/tests/data/input.csv"
+    input_file = "tests/data/input.csv"
     # Initialize the runner
     runner = LocalPipelineRunner(runner="subprocess")
     with tempfile.TemporaryDirectory() as temp_dir:
         # output_file = os.path.join(temp_dir, "output")
         # make payload
         payload = {
-            "processing_fn": "linke.tests.conftest.csv_processing_fn",
-            "setup_fn": "linke.tests.conftest.csv_setup_fn",
+            "processing_fn": "tests.conftest.csv_processing_fn",
+            "setup_fn": "tests.conftest.csv_setup_fn",
             "input_data": CsvInputData(
                 file=input_file, batch_size=2
             ).as_dict(),
@@ -165,8 +165,8 @@ def test_bigquery_reader_writer():
             output_table="rinoa-core-prod.temp_dataset.test_beam_writer",
             schema=schema,
         ),
-        processing_fn="linke.tests.conftest.bq_processing_fn",
-        setup_fn="linke.tests.conftest.csv_setup_fn",
+        processing_fn="tests.conftest.bq_processing_fn",
+        setup_fn="tests.conftest.csv_setup_fn",
         beam_pipeline_args=[
             "--runner=DirectRunner",
             "--temp_location=gs://rinoa-core-prod-ml-pipelines/bigquery",
@@ -176,9 +176,9 @@ def test_bigquery_reader_writer():
 
 
 def test_tfrecord_reader_writer():
-    input_file = "linke/tests/data/input.tfrecord"
+    input_file = "tests/data/input.tfrecord"
     processing_fn = (
-        "linke.tests.conftest.tfrecord_processing_fn"
+        "tests.conftest.tfrecord_processing_fn"
     )
     with tempfile.TemporaryDirectory() as temp_dir:
         output_file = os.path.join(temp_dir, "output")
@@ -232,9 +232,9 @@ def test_tfrecord_reader_writer():
 
 
 def test_parquet_reader_writer():
-    input_file = "linke/tests/data/input.parquet"
+    input_file = "tests/data/input.parquet"
     processing_fn = (
-        "linke.tests.conftest.parquet_processing_fn"
+        "tests.conftest.parquet_processing_fn"
     )
     with tempfile.TemporaryDirectory() as temp_dir:
         output_file = os.path.join(temp_dir, "output")

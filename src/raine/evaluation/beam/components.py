@@ -1,7 +1,7 @@
 from typing import List
 from kfp import dsl
 from kfp.dsl import Output, Artifact
-from linke.evaluation.beam.evaluator import EvalConfig, MetricSpec, run_evaluation_pipeline
+from raine.evaluation.beam.evaluator import EvalConfig, MetricSpec, run_evaluation_pipeline
 
 
 @dsl.component

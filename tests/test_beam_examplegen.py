@@ -1,7 +1,7 @@
 import tempfile
 import apache_beam as beam
-from linke.dataset.beam.data_processor import CsvInputData, CsvOutputData
-from linke.dataset.beam.example_gen import run_example_gen_data_split_pipeline, StatisticsType, DataSplitConfigs
+from raine.dataset.beam.data_processor import CsvInputData, CsvOutputData
+from raine.dataset.beam.example_gen import run_example_gen_data_split_pipeline, StatisticsType, DataSplitConfigs
 
 
 class TestExampleGenDataSplitPipeline:
@@ -16,7 +16,7 @@ class TestExampleGenDataSplitPipeline:
     def test_example_gen_e2e(self):
         split_configs = DataSplitConfigs(
             statistics=[{}],
-            input_data={"train": CsvInputData(batch_size=2, file="linke/tests/data/examples_train.csv"), "eval": CsvInputData(batch_size=2, file="")}
+            input_data={"train": CsvInputData(batch_size=2, file="tests/data/examples.csv"), "eval": CsvInputData(batch_size=2, file="")}
         )
         run_example_gen_data_split_pipeline(
             split_configs=split_configs, statistics_result=output_path)

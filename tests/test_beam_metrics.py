@@ -12,7 +12,7 @@ from apache_beam.transforms.stats import (
     ApproximateUniqueCombineFn,
 )
 
-from linke.evaluation.beam.metrics import (
+from raine.evaluation.beam.metrics import (
     TopKMetricPreprocessor,
     HitRatioTopK,
     _HitRatioTopKPreprocessor,
@@ -35,7 +35,7 @@ from linke.evaluation.beam.metrics import (
     _PopularityLiftTopKPreprocessor,
     _PopularityLiftTopKCombiner,
 )
-from linke.evaluation.beam.metrics import (
+from raine.evaluation.beam.metrics import (
     DEFAULT_PREDICTION_KEY,
     DEFAULT_LABEL_KEY,
     DEFAULT_FEATURE_KEY,
@@ -783,7 +783,7 @@ class TestMiscalibrationTopK:
     def test_loading_tag_maps(self):
         metric = MiscalibrationTopK(
             top_k=[1, 4, 5],
-            tag_maps="linke/tests/data/tag_map.txt",
+            tag_maps="tests/data/tag_map.txt",
             history_feature="view_history",
         )
         metric.preprocessors[0].setup()

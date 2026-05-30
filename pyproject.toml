@@ -1,46 +1,52 @@
-[tool.poetry]
+[project]
 name = "raine"
 version = "0.1.1"
-description = ""
-authors = ["sapphire008 <cui23327@gmail.com>"]
-license = "Apache License 2.0"
+description = "MLOps toolkit with reusable Kubeflow components"
 readme = "README.md"
+license = "Apache-2.0"
+authors = [{ name = "sapphire008", email = "cui23327@gmail.com" }]
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "numpy (>=2.0,<3.0)",
+    "pandas (>=2.0,<3.0)",
+    "docker==7.1.0",
+    "dynaconf==3.2.13",
+]
 
-[tool.poetry.dependencies]
-python = ">= 3.11, < 3.14"
-apache-beam = "2.57.0"
-kfp = "2.8.0"
-numpy = "1.26.4"
-pandas = "2.2.2"
-docker = "7.1.0"
-feast = "0.40.0"
-google-cloud-aiplatform = "1.59.0"
-tensorflow-metadata = "1.15.0"
-protobuf = "4.25.3"
-scipy = "1.14.1"
-dynaconf = "3.2.6"
+[project.optional-dependencies]
+gcp = [
+    "apache-beam[gcp]==2.73.0",
+    "google-cloud-aiplatform==1.154.0",
+]
+torch = [
+    "torch==2.8.0",
+]
+train = [
+    "kfp==2.16.1",
+    "webdataset==1.0.2",
+]
+serve = [
+    "litserve==0.2.17",
+]
 
-[tool.poetry.group.gcp.dependencies]
-apache-beam = {extras = ["gcp"], version = "2.57.0"}
-feast = {extras = ["gcp"], version = "0.40.0"}
-
-[tool.poetry.group.torch.dependencies]
-torch = "2.4.0"
-torchserve = "0.11.1"
-torch-model-archiver = "0.11.1"
-nvgpu = "0.10.0"
-webdataset = "0.2.100"
-
-[tool.poetry.group.ray.dependencies]
-ray = "2.37.0"
-
-[tool.poetry.group.dev.dependencies]
-black = "24.4.2"
-pytest = "^8.2.2"
-spyder-kernels = "3.0.0"
-grpcio-tools = "1.62.2"
-
+[dependency-groups]
+dev = [
+    "black==24.4.2",
+    "pytest>=8.2.2",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/raine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.uv.extra-build-dependencies]
+apache-beam = ["setuptools"]

@@ -9,9 +9,9 @@ import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.transforms.stats import ApproximateQuantilesCombineFn
 
-from linke.utils.beam_routines import CombineToJson
+from raine.utils.beam_routines import CombineToJson
 
-from linke.dataset.beam.data_processor import (
+from raine.dataset.beam.data_processor import (
     BaseInputData,
     BaseOutputData,
     BatchReader,
