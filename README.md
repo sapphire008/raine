@@ -1,4 +1,4 @@
-# Linke
+# Raine: MLOps Toolkit
 
 A set of reusable kubeflow components for MLOps.
 

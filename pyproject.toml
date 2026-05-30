@@ -1,13 +1,13 @@
 [tool.poetry]
-name = "linke"
+name = "raine"
 version = "0.1.1"
 description = ""
 authors = ["sapphire008 <cui23327@gmail.com>"]
-license = "MIT"
+license = "Apache License 2.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">= 3.11, < 3.13"
+python = ">= 3.11, < 3.14"
 apache-beam = "2.57.0"
 kfp = "2.8.0"
 numpy = "1.26.4"
@@ -39,8 +39,6 @@ black = "24.4.2"
 pytest = "^8.2.2"
 spyder-kernels = "3.0.0"
 grpcio-tools = "1.62.2"
-
-
 
 
 [build-system]
