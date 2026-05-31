@@ -18,6 +18,8 @@ pip install "raine[serve]"
 
 For PyTorch handlers, also install the `torch` extra. Other extras (`gcp`, `train`, `data`) cover optional tooling elsewhere in the repo and are not required for model packaging.
 
+`pip install raine` includes **`uv`** as a dependency so `save_model` can write `pylock.toml` during export.
+
 ## Model bundles
 
 `save_model` writes a directory like:
