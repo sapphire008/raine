@@ -34,7 +34,9 @@ class RaineModel:
         return getattr(module, class_name)
 
     @classmethod
-    def load_model(cls, model_uri: str | Path, *, configure_path: bool = True) -> ModelContext:
+    def load_model(
+        cls, model_uri: str | Path, *, configure_path: bool = True
+    ) -> ModelContext:
         """Load a saved model bundle and return its runtime context."""
         return ModelContext.from_uri(model_uri, configure_path=configure_path)
 

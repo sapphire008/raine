@@ -171,7 +171,7 @@ def test_save_model_writes_bundle_layout(tmp_path: Path, monkeypatch: pytest.Mon
     assert (output_dir / "artifacts/weights.pt").is_file()
     assert (output_dir / "code/marker.txt").is_file()
 
-    ctx = RaineModel.load_model(output_dir, configure_path=False)
+    ctx = RaineModel.load_model_context(output_dir, configure_path=False)
     assert ctx.artifact("weights").name == "weights.pt"
     assert ctx.artifact("config").name == "config.json"
 

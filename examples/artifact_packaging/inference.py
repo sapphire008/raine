@@ -6,15 +6,14 @@ from modules.module import ModelModule
 
 
 class MyInferenceAPI(RaineModel, ls.LitAPI):
-    def __init__(self, model_dir: str | Path | None = None):
+    def __init__(self):
         super().__init__(max_batch_size=1)
-        self.model_dir = model_dir
 
     def setup(self, device):
-        _ = ModelModule()
-        ctx = self.load_model(self.model_dir)
-        weights_path = ctx.artifact("weights")
-        config_path = ctx.artifact("config")
+        self.model = ModelModule()
+        ctx = self.context
+        weights_path = ctx.artifacts("weights")
+        config_path = ctx.artifacts("config")
         print(f"device:{device}, weights:{weights_path}, configs:{config_path}")
         
 

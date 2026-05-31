@@ -12,7 +12,7 @@ class MyInferenceAPI(RaineModel, ls.LitAPI):
 
     def setup(self, device):
         _ = ModelModule()
-        ctx = self.load_model(self.model_dir)
+        ctx = self.load_model_context(self.model_dir)
         weights_path = ctx.artifact("weights")
         config_path = ctx.artifact("config")
         print(f"device:{device}, weights:{weights_path}, configs:{config_path}")

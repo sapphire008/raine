@@ -47,7 +47,7 @@ class MyInferenceAPI(RaineModel, ls.LitAPI):
         self.model_dir = model_dir
 
     def setup(self, device):
-        ctx = self.load_model(self.model_dir)
+        ctx = self.load_model_context(self.model_dir)
         weights = ctx.artifact("weights")
         config = ctx.artifact("config")
         ...
