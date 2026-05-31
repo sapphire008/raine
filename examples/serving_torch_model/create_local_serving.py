@@ -16,7 +16,7 @@ if base_dir not in sys.path:
 sub_dir = "examples/serving_torch_model"
 deployment_dir = "deployment"
 
-from raine.serving.torchserve.save_model import export_to_model_archive
+from raine.serve.torchserve.save_model import export_to_model_archive
 from examples.serving_torch_model.model import MaskNet, FeatureSpec
 
 

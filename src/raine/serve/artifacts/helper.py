@@ -7,8 +7,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
-from raine.serving.artifacts.code_trace import link_staged_code_dir
-from raine.serving.artifacts.context import (
+from raine.serve.artifacts.code_trace import link_staged_code_dir
+from raine.serve.artifacts.context import (
     CODE_DIR_NAME,
     ArtifactBundle,
     link_bundle_artifacts,

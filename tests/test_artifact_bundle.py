@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from raine.serving.artifacts.artifacts import RaineModel
-from raine.serving.artifacts.utils import handler_module_dir, local_roots_from_seeds
-from raine.serving.artifacts.context import (
+from raine.serve.artifacts.artifacts import RaineModel
+from raine.serve.artifacts.utils import handler_module_dir, local_roots_from_seeds
+from raine.serve.artifacts.context import (
     ARTIFACTS_INDEX_NAME,
     ArtifactBundle,
     ModelContext,
@@ -94,7 +94,7 @@ def test_model_context_from_uri_resolves_artifacts(tmp_path: Path, monkeypatch: 
         inserted_paths.append(code_dir)
 
     monkeypatch.setattr(
-        "raine.serving.artifacts.context.configure_code_path",
+        "raine.serve.artifacts.context.configure_code_path",
         fake_configure_code_path,
     )
 
@@ -142,11 +142,11 @@ def test_save_model_writes_bundle_layout(tmp_path: Path, monkeypatch: pytest.Mon
         return None
 
     monkeypatch.setattr(
-        "raine.serving.artifacts.artifacts.materialize_artifact_code",
+        "raine.serve.artifacts.artifacts.materialize_artifact_code",
         fake_materialize_code,
     )
     monkeypatch.setattr(
-        "raine.serving.artifacts.artifacts.materialize_artifact_dependencies",
+        "raine.serve.artifacts.artifacts.materialize_artifact_dependencies",
         fake_materialize_deps,
     )
 
@@ -203,11 +203,11 @@ def test_save_model_passes_dependency_groups(tmp_path: Path, monkeypatch: pytest
         captured["start"] = start
 
     monkeypatch.setattr(
-        "raine.serving.artifacts.artifacts.materialize_artifact_code",
+        "raine.serve.artifacts.artifacts.materialize_artifact_code",
         fake_materialize_code,
     )
     monkeypatch.setattr(
-        "raine.serving.artifacts.artifacts.materialize_artifact_dependencies",
+        "raine.serve.artifacts.artifacts.materialize_artifact_dependencies",
         fake_materialize_deps,
     )
 
@@ -223,7 +223,7 @@ def test_save_model_passes_dependency_groups(tmp_path: Path, monkeypatch: pytest
 
 
 def test_merge_project_dependencies_extras_vs_groups() -> None:
-    from raine.serving.artifacts.deps_trace import merge_project_dependencies
+    from raine.serve.artifacts.deps_trace import merge_project_dependencies
 
     project_root = Path(__file__).resolve().parents[1]
     pyproject_path = project_root / "pyproject.toml"
@@ -245,7 +245,7 @@ def test_merge_project_dependencies_extras_vs_groups() -> None:
 
 
 def test_resolve_dependency_project_prefers_explicit_pyproject() -> None:
-    from raine.serving.artifacts.deps_trace import resolve_dependency_project
+    from raine.serve.artifacts.deps_trace import resolve_dependency_project
 
     project_root = Path(__file__).resolve().parents[1]
     pyproject_path = project_root / "pyproject.toml"
@@ -282,11 +282,11 @@ def test_save_model_passes_pyproject_toml_path(tmp_path: Path, monkeypatch: pyte
         captured["pyproject_toml_path"] = pyproject_toml_path
 
     monkeypatch.setattr(
-        "raine.serving.artifacts.artifacts.materialize_artifact_code",
+        "raine.serve.artifacts.artifacts.materialize_artifact_code",
         fake_materialize_code,
     )
     monkeypatch.setattr(
-        "raine.serving.artifacts.artifacts.materialize_artifact_dependencies",
+        "raine.serve.artifacts.artifacts.materialize_artifact_dependencies",
         fake_materialize_deps,
     )
 

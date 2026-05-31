@@ -10,15 +10,15 @@ from litserve.loops.base import LitLoop
 from litserve.mcp import MCP
 from litserve.specs.base import LitSpec
 
-from raine.serving.artifacts.code_trace import materialize_artifact_code
-from raine.serving.artifacts.context import (
+from raine.serve.artifacts.code_trace import materialize_artifact_code
+from raine.serve.artifacts.context import (
     ArtifactBundle,
     ModelContext,
     materialize_bundle_artifacts,
     write_artifacts_index,
 )
-from raine.serving.artifacts.deps_trace import materialize_artifact_dependencies
-from raine.serving.artifacts.utils import (
+from raine.serve.artifacts.deps_trace import materialize_artifact_dependencies
+from raine.serve.artifacts.utils import (
     build_search_paths,
     handler_module_dir,
     local_roots_from_seeds,

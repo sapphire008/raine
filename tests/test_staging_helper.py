@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from raine.serving.artifacts.context import ModelContext, read_artifacts_index
-from raine.serving.artifacts.helper import stage_model_bundle_at, staged_model_bundle
+from raine.serve.artifacts.context import ModelContext, read_artifacts_index
+from raine.serve.artifacts.helper import stage_model_bundle_at, staged_model_bundle
 
 
 def test_stage_model_bundle_at_symlinks_artifacts_and_code(tmp_path: Path) -> None:

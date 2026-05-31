@@ -1,7 +1,7 @@
 import litserve as ls
 from pathlib import Path
 
-from raine.serving.artifacts import RaineModel
+from raine.serve.artifacts import RaineModel
 from modules.module import ModelModule
 
 
@@ -46,7 +46,7 @@ class MyInferenceAPI(RaineModel, ls.LitAPI):
 # )
 
 # Local functional tests without a full export:
-# from raine.serving.artifacts import staged_model_bundle
+# from raine.serve.artifacts import staged_model_bundle
 #
 # EXAMPLE_ROOT = Path(__file__).resolve().parent
 # with staged_model_bundle(

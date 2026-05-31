@@ -1,5 +1,5 @@
-from raine.serving.artifacts.artifacts import LitAPIConfig, RaineModel
-from raine.serving.artifacts.code_trace import (
+from raine.serve.artifacts.artifacts import LitAPIConfig, RaineModel
+from raine.serve.artifacts.code_trace import (
     CodeTraceResult,
     collect_local_modules,
     copy_local_code_paths,
@@ -7,7 +7,7 @@ from raine.serving.artifacts.code_trace import (
     materialize_artifact_code,
     module_source_files,
 )
-from raine.serving.artifacts.context import (
+from raine.serve.artifacts.context import (
     ARTIFACTS_DIR_NAME,
     ARTIFACTS_INDEX_NAME,
     CODE_DIR_NAME,
@@ -19,7 +19,7 @@ from raine.serving.artifacts.context import (
     read_artifacts_index,
     write_artifacts_index,
 )
-from raine.serving.artifacts.deps_trace import (
+from raine.serve.artifacts.deps_trace import (
     ArtifactDependencySpec,
     export_pylock_toml,
     find_project_root,
@@ -30,8 +30,8 @@ from raine.serving.artifacts.deps_trace import (
     write_artifact_pylock,
     write_artifact_pyproject,
 )
-from raine.serving.artifacts.helper import stage_model_bundle_at, staged_model_bundle
-from raine.serving.artifacts.utils import (
+from raine.serve.artifacts.helper import stage_model_bundle_at, staged_model_bundle
+from raine.serve.artifacts.utils import (
     build_search_paths,
     handler_module_dir,
     local_roots_from_seeds,
