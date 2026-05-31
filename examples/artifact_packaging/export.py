@@ -4,7 +4,7 @@ from pathlib import Path
 from inference import MyInferenceAPI
 
 EXAMPLE_ROOT = Path(__file__).resolve().parent
-OUTPUT_DIR = EXAMPLE_ROOT / "my_model"
+OUTPUT_DIR = EXAMPLE_ROOT / "exported" / "my_model"
 
 
 def main() -> Path:

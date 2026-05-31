@@ -1,0 +1,8 @@
+{
+  "schema_version": "1",
+  "artifacts": {
+    "config": "artifacts/config.json",
+    "weights": "artifacts/weights"
+  },
+  "metadata": {}
+}
