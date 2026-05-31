@@ -1,4 +1,4 @@
-from raine.serve.artifacts.artifacts import LitAPIConfig, RaineModel
+from raine.serve.artifacts.artifacts import RaineModel
 from raine.serve.artifacts.code_trace import (
     CodeTraceResult,
     collect_local_modules,
@@ -44,7 +44,6 @@ __all__ = [
     "ArtifactDependencySpec",
     "CODE_DIR_NAME",
     "CodeTraceResult",
-    "LitAPIConfig",
     "ModelContext",
     "RaineModel",
     "build_search_paths",

@@ -1,0 +1,50 @@
+name: Publish to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: Target repository
+        required: true
+        default: pypi
+        type: choice
+        options:
+          - pypi
+          - testpypi
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run artifact packaging tests
+        run: >
+          uv run pytest
+          tests/test_artifact_bundle.py
+          tests/test_code_trace.py
+          tests/test_staging_helper.py
+          -q
+
+      - name: Build package
+        run: uv build
+
+      - name: Publish to PyPI
+        if: inputs.repository == 'pypi'
+        run: uv publish
+
+      - name: Publish to TestPyPI
+        if: inputs.repository == 'testpypi'
+        env:
+          UV_PUBLISH_URL: https://test.pypi.org/legacy/
+        run: uv publish
