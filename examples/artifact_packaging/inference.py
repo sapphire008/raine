@@ -2,7 +2,7 @@ import litserve as ls
 from pathlib import Path
 
 from raine.serving.artifacts import RaineModel
-
+from modules.module import ModelModule
 
 
 class MyInferenceAPI(RaineModel, ls.LitAPI):
@@ -11,6 +11,7 @@ class MyInferenceAPI(RaineModel, ls.LitAPI):
         self.model_dir = model_dir
 
     def setup(self, device):
+        _ = ModelModule()
         ctx = self.load_model(self.model_dir)
         weights_path = ctx.artifact("weights")
         config_path = ctx.artifact("config")
@@ -41,6 +42,7 @@ class MyInferenceAPI(RaineModel, ls.LitAPI):
 #     code_seeds=["models", "utils.inference_base"],  # optional extra safety
 #     dependency_extras=("gcp",),  # [project.optional-dependencies]
 #     dependency_groups=("torch", "inspect", "visinger2"),  # [dependency-groups]
+#     code_renames={"inference_en.py": "inference.py"},
 # )
 
 # Local functional tests without a full export:
@@ -48,11 +50,9 @@ class MyInferenceAPI(RaineModel, ls.LitAPI):
 #
 # EXAMPLE_ROOT = Path(__file__).resolve().parent
 # with staged_model_bundle(
-#     artifacts={
-#         "config": EXAMPLE_ROOT / "trained_model/configs.json",
-#         "weights": EXAMPLE_ROOT / "trained_model/weights",
-#     },
-#     source_dir=EXAMPLE_ROOT,
+#     artifacts={...},
+#     source_dir=SRC,
+#     code_renames={"inference_en.py": "inference.py"},
 # ) as bundle_dir:
 #     api = MyInferenceAPI(model_dir=str(bundle_dir))
 #     ls.LitServer(api).run(port=8080)

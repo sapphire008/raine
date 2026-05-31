@@ -63,6 +63,32 @@ def test_staged_model_bundle_cleans_up_temp_dir() -> None:
     assert not seen.exists()
 
 
+def test_stage_model_bundle_at_applies_code_renames(tmp_path: Path) -> None:
+    source_dir = tmp_path / "src"
+    source_dir.mkdir()
+    (source_dir / "inference_en.py").write_text("HANDLER = 1\n", encoding="utf-8")
+    (source_dir / "models.py").write_text("MODEL = 1\n", encoding="utf-8")
+
+    bundle_root = tmp_path / "bundle"
+    stage_model_bundle_at(
+        bundle_root,
+        artifacts={},
+        source_dir=source_dir,
+        code_renames={"inference_en.py": "inference.py"},
+    )
+
+    code_dir = bundle_root / "code"
+    assert code_dir.is_dir()
+    assert not code_dir.is_symlink()
+    inference_link = code_dir / "inference.py"
+    models_link = code_dir / "models.py"
+    assert inference_link.is_symlink()
+    assert models_link.is_symlink()
+    assert inference_link.resolve() == (source_dir / "inference_en.py").resolve()
+    assert models_link.resolve() == (source_dir / "models.py").resolve()
+    assert not (code_dir / "inference_en.py").exists()
+
+
 def test_staged_model_bundle_with_explicit_root(tmp_path: Path) -> None:
     bundle_root = tmp_path / "explicit-bundle"
     config = tmp_path / "config.json"

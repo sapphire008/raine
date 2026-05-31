@@ -15,6 +15,9 @@ def main() -> Path:
             "config": EXAMPLE_ROOT / "trained_model/configs.json",
             "weights": EXAMPLE_ROOT / "trained_model/weights",
         },
+        code_renames={
+            "inference.py": "api.py",  # rename code
+        }
     )
 
 

@@ -9,7 +9,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import Sequence
+from typing import Mapping, Sequence
 
 
 @dataclass(frozen=True)
@@ -214,23 +214,60 @@ def _destination_for_module_file(
     return destination_root / source_file.name
 
 
+def _normalize_code_relative_path(path: str | Path) -> str:
+    relative = Path(path)
+    if relative.is_absolute():
+        raise ValueError(f"code path must be relative to code/, got {path!r}")
+    return relative.as_posix()
+
+
+def _normalize_code_renames(code_renames: Mapping[str, str]) -> dict[str, str]:
+    return {
+        _normalize_code_relative_path(source): _normalize_code_relative_path(destination)
+        for source, destination in code_renames.items()
+    }
+
+
+def _apply_code_renames(
+    target: Path,
+    code_root: Path,
+    renames: Mapping[str, str],
+) -> Path:
+    relative = target.relative_to(code_root).as_posix()
+    renamed = renames.get(relative)
+    if renamed is None:
+        return target
+    return code_root / _normalize_code_relative_path(renamed)
+
+
 def copy_local_code_paths(
     modules: Sequence[str],
     destination_root: Path,
     *,
     search_paths: Sequence[Path] | None = None,
+    code_renames: Mapping[str, str] | None = None,
 ) -> CodeTraceResult:
     """Copy traced local module files into ``destination_root/code`` preserving structure."""
     files = module_source_files(modules)
     code_root = destination_root / "code"
     anchors = tuple(path.resolve() for path in (search_paths or (destination_root,)))
+    normalized_renames = _normalize_code_renames(code_renames) if code_renames else {}
 
     copied: list[Path] = []
+    destinations: dict[str, Path] = {}
     for source_file in files:
         target = _destination_for_module_file(source_file, code_root, anchor_paths=anchors)
+        target = _apply_code_renames(target, code_root, normalized_renames)
+        relative_target = target.relative_to(code_root).as_posix()
+        if relative_target in destinations:
+            raise ValueError(
+                f"Multiple traced modules would be written to code/{relative_target}: "
+                f"{destinations[relative_target]} and {source_file}"
+            )
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_file, target)
         copied.append(target)
+        destinations[relative_target] = source_file
 
     return CodeTraceResult(
         modules=tuple(modules),
@@ -245,6 +282,7 @@ def materialize_artifact_code(
     *,
     local_roots: Sequence[str] = ("raine",),
     search_paths: Sequence[Path] | None = None,
+    code_renames: Mapping[str, str] | None = None,
 ) -> CodeTraceResult:
     """Trace and copy all local code required by ``seeds`` into an artifact directory."""
     modules = collect_local_modules(
@@ -256,4 +294,49 @@ def materialize_artifact_code(
         modules,
         destination_root,
         search_paths=search_paths,
+        code_renames=code_renames,
     )
+
+
+def link_staged_code_dir(
+    code_dir: Path,
+    source_dir: Path,
+    *,
+    code_renames: Mapping[str, str] | None = None,
+) -> None:
+    """Symlink a source tree into ``code_dir``, optionally applying ``code_renames``."""
+    resolved_source = source_dir.resolve()
+    code_dir.parent.mkdir(parents=True, exist_ok=True)
+    if code_dir.exists() or code_dir.is_symlink():
+        if code_dir.is_symlink() or code_dir.is_file():
+            code_dir.unlink()
+        else:
+            shutil.rmtree(code_dir)
+
+    if not code_renames:
+        code_dir.symlink_to(resolved_source, target_is_directory=True)
+        return
+
+    normalized_renames = _normalize_code_renames(code_renames)
+    code_dir.mkdir(parents=True, exist_ok=True)
+    destinations: dict[str, Path] = {}
+
+    for source_file in sorted(resolved_source.rglob("*")):
+        if not source_file.is_file():
+            continue
+        relative_parts = source_file.relative_to(resolved_source).parts
+        if any(part == "__pycache__" for part in relative_parts):
+            continue
+
+        relative = source_file.relative_to(resolved_source).as_posix()
+        target_relative = normalized_renames.get(relative, relative)
+        if target_relative in destinations:
+            raise ValueError(
+                f"Multiple source files would be linked to code/{target_relative}: "
+                f"{destinations[target_relative]} and {source_file}"
+            )
+
+        destination = code_dir / target_relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.symlink_to(source_file)
+        destinations[target_relative] = source_file

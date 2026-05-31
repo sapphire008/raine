@@ -116,7 +116,7 @@ def test_save_model_writes_bundle_layout(tmp_path: Path, monkeypatch: pytest.Mon
 
     captured: dict[str, object] = {}
 
-    def fake_materialize_code(destination_root, seeds, *, local_roots, search_paths):
+    def fake_materialize_code(destination_root, seeds, *, local_roots, search_paths, code_renames=None):
         captured["seeds"] = list(seeds)
         captured["local_roots"] = local_roots
         code_root = destination_root / "code"

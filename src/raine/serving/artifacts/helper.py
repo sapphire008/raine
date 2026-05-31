@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import shutil
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
+from raine.serving.artifacts.code_trace import link_staged_code_dir
 from raine.serving.artifacts.context import (
     CODE_DIR_NAME,
     ArtifactBundle,
@@ -22,6 +22,7 @@ def stage_model_bundle_at(
     artifacts: Mapping[str, str | Path],
     source_dir: str | Path | None = None,
     metadata: Mapping[str, Any] | None = None,
+    code_renames: Mapping[str, str] | None = None,
 ) -> Path:
     """Create a bundle layout at ``bundle_root`` using symlinks instead of copies.
 
@@ -41,13 +42,11 @@ def stage_model_bundle_at(
         if not resolved_source.is_dir():
             raise NotADirectoryError(f"source_dir must be a directory: {resolved_source}")
 
-        code_dir = resolved_root / CODE_DIR_NAME
-        if code_dir.exists() or code_dir.is_symlink():
-            if code_dir.is_symlink() or code_dir.is_file():
-                code_dir.unlink()
-            else:
-                shutil.rmtree(code_dir)
-        code_dir.symlink_to(resolved_source, target_is_directory=True)
+        link_staged_code_dir(
+            resolved_root / CODE_DIR_NAME,
+            resolved_source,
+            code_renames=code_renames,
+        )
 
     return resolved_root
 
@@ -58,6 +57,7 @@ def staged_model_bundle(
     artifacts: Mapping[str, str | Path],
     source_dir: str | Path | None = None,
     metadata: Mapping[str, Any] | None = None,
+    code_renames: Mapping[str, str] | None = None,
     bundle_root: str | Path | None = None,
 ) -> Iterator[Path]:
     """Yield a staged model bundle directory for local functional tests.
@@ -72,6 +72,7 @@ def staged_model_bundle(
             artifacts=artifacts,
             source_dir=source_dir,
             metadata=metadata,
+            code_renames=code_renames,
         )
         return
 
@@ -81,4 +82,5 @@ def staged_model_bundle(
             artifacts=artifacts,
             source_dir=source_dir,
             metadata=metadata,
+            code_renames=code_renames,
         )

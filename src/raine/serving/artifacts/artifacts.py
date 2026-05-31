@@ -85,6 +85,7 @@ class RaineModel:
         dependency_groups: Sequence[str] = (),
         project_root: str | Path | None = None,
         pyproject_toml_path: str | Path | None = None,
+        code_renames: Mapping[str, str] | None = None,
     ) -> Path:
         """Package this handler into a deployable artifact directory.
 
@@ -118,6 +119,9 @@ class RaineModel:
             pyproject_toml_path: Explicit path to a ``pyproject.toml`` for
                 dependency export. When set, takes precedence over
                 ``project_root`` search.
+            code_renames: Optional mapping of bundle-relative paths within
+                ``code/`` to rename after tracing, e.g.
+                ``{"inference_en.py": "inference.py"}``.
 
         Returns:
             Resolved path to ``output_dir``.
@@ -150,6 +154,7 @@ class RaineModel:
             seeds=seeds,
             local_roots=local_roots,
             search_paths=search_paths,
+            code_renames=code_renames,
         )
         materialize_artifact_dependencies(
             output_dir,
