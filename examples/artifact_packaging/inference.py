@@ -15,10 +15,10 @@ class MyInferenceAPI(RaineModel, ls.LitAPI):
         config_path = self.context.artifacts["config"]
         print(f"device:{device}, weights:{weights_path}, configs:{config_path}")
 
-
-# Deploy:
-# api = MyInferenceAPI.from_bundle("/path/to/my_model", max_batch_size=1)
-# ls.LitServer(api).run(port=8080)
+if __name__ == '__main__':
+    # Deploy:
+    api = MyInferenceAPI.from_bundle("./model_artifact/my_model", max_batch_size=1)
+    ls.LitServer(api).run(port=8080, generate_client_file=False)
 
 # Local functional tests without a full export:
 # from pathlib import Path

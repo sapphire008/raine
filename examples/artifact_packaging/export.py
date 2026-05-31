@@ -4,9 +4,8 @@ from pathlib import Path
 from inference import MyInferenceAPI
 
 EXAMPLE_ROOT = Path(__file__).resolve().parent
-OUTPUT_DIR = EXAMPLE_ROOT / "exported" / "my_model"
+OUTPUT_DIR = EXAMPLE_ROOT / "model_artifact" / "my_model"
 
-from pdb import set_trace
 
 def main() -> Path:
     handler = MyInferenceAPI()
@@ -25,7 +24,6 @@ def main() -> Path:
 def load(bundle_dir: str | Path) -> MyInferenceAPI:
     """Load the exported bundle as a LitServe-ready handler (MLflow-style)."""
     handler = MyInferenceAPI.from_bundle(bundle_dir, max_batch_size=1)
-    set_trace()
     return handler
 
 
