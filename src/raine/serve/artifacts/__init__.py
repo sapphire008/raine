@@ -20,7 +20,9 @@ from raine.serve.artifacts.context import (
     write_artifacts_index,
 )
 from raine.serve.artifacts.deps_trace import (
+    WHEELS_DIR_NAME,
     ArtifactDependencySpec,
+    bundle_local_wheels,
     export_pylock_toml,
     find_project_root,
     materialize_artifact_dependencies,
@@ -47,6 +49,7 @@ __all__ = [
     "ModelContext",
     "RaineModel",
     "build_search_paths",
+    "bundle_local_wheels",
     "handler_module_dir",
     "collect_local_modules",
     "configure_code_path",
@@ -70,4 +73,5 @@ __all__ = [
     "write_artifact_pylock",
     "write_artifact_pyproject",
     "write_artifacts_index",
+    "WHEELS_DIR_NAME",
 ]

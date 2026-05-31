@@ -24,6 +24,8 @@ For PyTorch handlers, also install the `torch` extra. Other extras (`gcp`, `trai
 
 If `uv` is missing, export still succeeds: raine writes `pyproject.toml` and emits a **warning** that `pylock.toml` was skipped. Install [`uv`](https://docs.astral.sh/uv/) and re-run export, or run `uv export --format pylock.toml --directory <bundle_dir>` manually against the bundle directory.
 
+Local proprietary wheels referenced via PEP 508 ``@ file:...`` (or ``[tool.uv.sources]`` paths ending in ``.whl``) are copied into ``wheels/`` and rewritten as portable ``file:./wheels/<name>.whl`` entries in the artifact manifest.
+
 You do not need `uv` at all if you use another installer. The artifact `pyproject.toml` is standard PEP 621 — Poetry, pip, pdm, etc. can install from it. A Poetry consumer can run `poetry lock` / `poetry install` in the bundle directory and ignore `pylock.toml` entirely.
 
 ## Model bundles
@@ -36,6 +38,7 @@ my_model/
 ├── artifacts/         # weights, configs, and other assets
 ├── artifacts.json     # logical name → bundle path index
 ├── pyproject.toml     # merged runtime dependencies
+├── wheels/            # local .whl deps (copied when referenced)
 └── pylock.toml        # locked deps (when uv is on PATH; optional)
 ```
 
@@ -84,7 +87,8 @@ handler.save_model(
 | `code_renames` | Rename files in the bundle, e.g. `{"inference_en.py": "inference.py"}` |
 | `dependency_extras` | PEP 621 optional deps from your `pyproject.toml` |
 | `dependency_groups` | uv/poetry dependency groups to merge |
-| `extra_dependencies` | Extra PEP 508 reqs merged last; override same package from groups/extras |
+| `extra_dependencies` | Extra PEP 508 reqs merged last; `@ file:...` wheels copied into `wheels/` |
+| `include_base` | When `false`, skip source `[project].dependencies`; merge only extras/groups/overrides |
 | `pyproject_toml_path` | Explicit deps manifest (overrides upward search) |
 
 ### Local testing without a full export

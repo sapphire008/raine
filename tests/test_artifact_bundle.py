@@ -326,6 +326,48 @@ def test_save_model_passes_extra_dependencies(tmp_path: Path, monkeypatch: pytes
     assert captured["extra_dependencies"] == ("raine", "litserve==0.2.17")
 
 
+def test_save_model_passes_include_base(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    output_dir = tmp_path / "model-bundle"
+    weights = tmp_path / "weights.pt"
+    weights.write_text("weights", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    def fake_materialize_code(*args, **kwargs):
+        return type("Result", (), {"destination": output_dir / "code"})()
+
+    def fake_materialize_deps(
+        destination_root,
+        project_root,
+        *,
+        pyproject_toml_path,
+        start,
+        extras,
+        groups,
+        extra_dependencies=(),
+        include_base,
+        write_lock=True,
+    ):
+        captured["include_base"] = include_base
+
+    monkeypatch.setattr(
+        "raine.serve.artifacts.artifacts.materialize_artifact_code",
+        fake_materialize_code,
+    )
+    monkeypatch.setattr(
+        "raine.serve.artifacts.artifacts.materialize_artifact_dependencies",
+        fake_materialize_deps,
+    )
+
+    DummyHandler().save_model(
+        output_dir,
+        artifacts={"weights": weights},
+        dependency_extras=(),
+        include_base=False,
+    )
+
+    assert captured["include_base"] is False
+
+
 def test_materialize_artifact_dependencies_skips_pylock_when_uv_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -437,3 +479,166 @@ def test_model_context_missing_artifact_raises(tmp_path: Path) -> None:
     ctx = ModelContext.from_uri(bundle_root, configure_path=False)
     with pytest.raises(KeyError, match="weights"):
         _ = ctx.artifacts["weights"]
+
+
+def test_bundle_local_wheels_from_file_url(tmp_path: Path) -> None:
+    from raine.serve.artifacts.deps_trace import materialize_artifact_dependencies
+
+    project_root = tmp_path / "project"
+    dist = project_root / "dist"
+    dist.mkdir(parents=True)
+    wheel_name = "music_tokenizer-0.3.0-py3-none-any.whl"
+    wheel = dist / wheel_name
+    wheel.write_bytes(b"wheel-payload")
+
+    (project_root / "pyproject.toml").write_text(
+        '[project]\nname = "demo"\nversion = "0.1.0"\nrequires-python = ">=3.11"\n',
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "bundle"
+    spec = materialize_artifact_dependencies(
+        output_dir,
+        project_root,
+        include_base=False,
+        extra_dependencies=(f"music-tokenizer @ file:./dist/{wheel_name}",),
+        write_lock=False,
+    )
+
+    assert spec.dependencies == (f"music-tokenizer @ file:./wheels/{wheel_name}",)
+    assert (output_dir / "wheels" / wheel_name).read_bytes() == b"wheel-payload"
+    assert f'file:./wheels/{wheel_name}' in (output_dir / "pyproject.toml").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_bundle_local_wheels_from_uv_sources(tmp_path: Path) -> None:
+    from raine.serve.artifacts.deps_trace import materialize_artifact_dependencies
+
+    project_root = tmp_path / "project"
+    dist = project_root / "dist"
+    dist.mkdir(parents=True)
+    wheel_name = "music_tokenizer-0.3.0-py3-none-any.whl"
+    (dist / wheel_name).write_bytes(b"wheel-payload")
+
+    (project_root / "pyproject.toml").write_text(
+        f"""\
+[project]
+name = "demo"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["music-tokenizer"]
+
+[tool.uv.sources]
+music-tokenizer = {{ path = "./dist/{wheel_name}" }}
+""",
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "bundle"
+    spec = materialize_artifact_dependencies(
+        output_dir,
+        project_root,
+        write_lock=False,
+    )
+
+    assert spec.dependencies == (f"music-tokenizer @ file:./wheels/{wheel_name}",)
+    assert (output_dir / "wheels" / wheel_name).is_file()
+
+
+def test_bundle_local_wheels_from_project_dependencies(tmp_path: Path) -> None:
+    from raine.serve.artifacts.deps_trace import materialize_artifact_dependencies
+
+    project_root = tmp_path / "project"
+    dist = project_root / "dist"
+    dist.mkdir(parents=True)
+    wheel_name = "music_tokenizer-0.3.0-py3-none-any.whl"
+    (dist / wheel_name).write_bytes(b"wheel-payload")
+
+    (project_root / "pyproject.toml").write_text(
+        f"""\
+[project]
+name = "demo"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "music-tokenizer @ file:./dist/{wheel_name}",
+]
+""",
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "bundle"
+    spec = materialize_artifact_dependencies(
+        output_dir,
+        project_root,
+        write_lock=False,
+    )
+
+    assert spec.dependencies == (f"music-tokenizer @ file:./wheels/{wheel_name}",)
+    assert (output_dir / "wheels" / wheel_name).is_file()
+
+
+def test_bundle_local_wheels_keeps_already_bundled_reference(tmp_path: Path) -> None:
+    from raine.serve.artifacts.deps_trace import (
+        ArtifactDependencySpec,
+        bundle_local_wheels,
+        read_project_metadata_at,
+    )
+
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    output_dir = tmp_path / "bundle"
+    wheel_name = "music_tokenizer-0.3.0-py3-none-any.whl"
+    wheels_dir = output_dir / "wheels"
+    wheels_dir.mkdir(parents=True)
+    (wheels_dir / wheel_name).write_bytes(b"wheel-payload")
+
+    bundled_req = f"music-tokenizer @ file:./wheels/{wheel_name}"
+    spec = bundle_local_wheels(
+        ArtifactDependencySpec(name="demo-artifact", dependencies=(bundled_req,)),
+        output_dir,
+        project_root=project_root,
+        metadata=read_project_metadata_at(
+            _write_minimal_pyproject(project_root / "pyproject.toml")
+        ),
+    )
+
+    assert spec.dependencies == (bundled_req,)
+    assert (wheels_dir / wheel_name).read_bytes() == b"wheel-payload"
+
+
+def test_bundle_local_wheels_missing_file_raises(tmp_path: Path) -> None:
+    from raine.serve.artifacts.deps_trace import materialize_artifact_dependencies
+
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    (project_root / "pyproject.toml").write_text(
+        '[project]\nname = "demo"\nversion = "0.1.0"\nrequires-python = ">=3.11"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(FileNotFoundError, match="Local file dependency not found"):
+        materialize_artifact_dependencies(
+            tmp_path / "bundle",
+            project_root,
+            include_base=False,
+            extra_dependencies=("music-tokenizer @ file:./dist/missing.whl",),
+            write_lock=False,
+        )
+
+
+def test_file_url_to_path_supports_relative_and_absolute() -> None:
+    from raine.serve.artifacts.deps_trace import _file_url_to_path
+
+    assert _file_url_to_path("file:./dist/foo.whl") == "./dist/foo.whl"
+    assert _file_url_to_path("file://./dist/foo.whl") == "./dist/foo.whl"
+    assert _file_url_to_path("file:///tmp/foo.whl") == "/tmp/foo.whl"
+
+
+def _write_minimal_pyproject(path: Path) -> Path:
+    path.write_text(
+        '[project]\nname = "demo"\nversion = "0.1.0"\nrequires-python = ">=3.11"\n',
+        encoding="utf-8",
+    )
+    return path

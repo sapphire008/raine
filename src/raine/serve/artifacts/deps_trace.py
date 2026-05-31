@@ -10,6 +10,7 @@ written.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -27,6 +28,19 @@ _UV_LOCKFILE_WARNING = (
     "(https://docs.astral.sh/uv/) and re-run export, or run "
     "`uv export --format pylock.toml --directory <bundle_dir>` manually."
 )
+
+WHEELS_DIR_NAME = "wheels"
+
+
+@dataclass(frozen=True)
+class ArtifactDependencySpec:
+    """PEP 621 project metadata written into a model artifact directory."""
+
+    name: str
+    version: str = "0.1.0"
+    requires_python: str = ">=3.11"
+    dependencies: tuple[str, ...] = ()
+    description: str = "Raine model artifact runtime environment"
 
 
 def normalize_requires_python(requires_python: str) -> str:
@@ -54,6 +68,200 @@ def _requirement_key(requirement: str) -> str:
     return token.strip().lower().replace("_", "-")
 
 
+def _package_name_from_requirement(requirement: str) -> str:
+    """Return the PEP 508 distribution name from a requirement string."""
+    token = requirement.strip().split("[", 1)[0]
+    for separator in ("===", "==", ">=", "<=", "!=", "~=", ">", "<", " @ "):
+        if separator in token:
+            return token.split(separator, 1)[0].strip()
+    return token.strip()
+
+
+def _parse_direct_file_reference(requirement: str) -> tuple[str, str] | None:
+    """Return ``(package_name, file_url)`` when ``requirement`` uses ``@ file:...``."""
+    if " @ " not in requirement:
+        return None
+    name, url = requirement.split(" @ ", 1)
+    url = url.strip()
+    if not url.startswith("file:"):
+        return None
+    package_name = _package_name_from_requirement(name.strip())
+    if not package_name:
+        return None
+    return package_name, url
+
+
+def _file_url_to_path(file_url: str) -> str:
+    """Convert a PEP 508 ``file:`` URL to a filesystem path string."""
+    url = file_url.strip()
+    if url.startswith("file:///"):
+        return url[7:]
+    if url.startswith("file://"):
+        remainder = url[7:]
+        if remainder.startswith("./") or remainder.startswith("../"):
+            return remainder
+        return remainder
+    if url.startswith("file:"):
+        return url[5:]
+    raise ValueError(f"Not a file URL: {file_url!r}")
+
+
+def _resolve_path_against_roots(
+    path: Path,
+    *,
+    project_root: Path,
+    output_dir: Path,
+) -> Path | None:
+    """Resolve ``path`` against ``output_dir`` then ``project_root``."""
+    if path.is_absolute():
+        candidate = path.resolve()
+        return candidate if candidate.is_file() else None
+
+    for root in (output_dir, project_root):
+        candidate = (root / path).resolve()
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _resolve_file_reference_path(
+    file_url: str,
+    *,
+    project_root: Path,
+    output_dir: Path,
+) -> Path:
+    """Resolve a ``file:`` URL from a requirement to an existing file path."""
+    raw_path = Path(_file_url_to_path(file_url))
+    resolved = _resolve_path_against_roots(
+        raw_path,
+        project_root=project_root,
+        output_dir=output_dir,
+    )
+    if resolved is None:
+        raise FileNotFoundError(
+            f"Local file dependency not found for {file_url!r} "
+            f"(searched under {output_dir} and {project_root})"
+        )
+    return resolved
+
+
+def _read_uv_wheel_source_paths(metadata: dict) -> dict[str, str]:
+    """Return normalized package name → path for ``[tool.uv.sources]`` wheel paths."""
+    sources = metadata.get("tool", {}).get("uv", {}).get("sources", {})
+    paths: dict[str, str] = {}
+    for name, spec in sources.items():
+        if not isinstance(spec, dict):
+            continue
+        path = spec.get("path")
+        if isinstance(path, str) and path.endswith(".whl"):
+            paths[_requirement_key(name)] = path
+    return paths
+
+
+def _copy_wheel_to_bundle(
+    source_wheel: Path,
+    wheels_dir: Path,
+    *,
+    copied: dict[Path, str],
+) -> str:
+    """Copy ``source_wheel`` into ``wheels_dir`` and return the bundle-relative filename."""
+    resolved_source = source_wheel.resolve()
+    if resolved_source in copied:
+        return copied[resolved_source]
+
+    wheels_dir.mkdir(parents=True, exist_ok=True)
+    destination = wheels_dir / resolved_source.name
+    if not destination.exists() or destination.read_bytes() != resolved_source.read_bytes():
+        shutil.copy2(resolved_source, destination)
+    copied[resolved_source] = destination.name
+    return destination.name
+
+
+def _bundle_wheel_requirement(
+    package_name: str,
+    source_wheel: Path,
+    wheels_dir: Path,
+    *,
+    copied: dict[Path, str],
+) -> str:
+    wheel_name = _copy_wheel_to_bundle(source_wheel, wheels_dir, copied=copied)
+    return f"{package_name} @ file:./{WHEELS_DIR_NAME}/{wheel_name}"
+
+
+def bundle_local_wheels(
+    spec: ArtifactDependencySpec,
+    output_dir: Path,
+    *,
+    project_root: Path,
+    metadata: dict,
+) -> ArtifactDependencySpec:
+    """Copy local ``.whl`` references into ``output_dir/wheels`` and rewrite deps."""
+    wheels_dir = output_dir / WHEELS_DIR_NAME
+    copied: dict[Path, str] = {}
+    uv_sources = _read_uv_wheel_source_paths(metadata)
+    bundled_dependencies: list[str] = []
+
+    for requirement in spec.dependencies:
+        direct = _parse_direct_file_reference(requirement)
+        if direct is not None:
+            package_name, file_url = direct
+            source_wheel = _resolve_file_reference_path(
+                file_url,
+                project_root=project_root,
+                output_dir=output_dir,
+            )
+            if source_wheel.suffix != ".whl":
+                bundled_dependencies.append(requirement)
+                continue
+            if (
+                source_wheel.parent == wheels_dir.resolve()
+                and file_url.startswith(f"file:./{WHEELS_DIR_NAME}/")
+            ):
+                bundled_dependencies.append(requirement)
+                continue
+            bundled_dependencies.append(
+                _bundle_wheel_requirement(
+                    package_name,
+                    source_wheel,
+                    wheels_dir,
+                    copied=copied,
+                )
+            )
+            continue
+
+        source_path = uv_sources.get(_requirement_key(requirement))
+        if source_path is not None:
+            source_wheel = _resolve_path_against_roots(
+                Path(source_path),
+                project_root=project_root,
+                output_dir=output_dir,
+            )
+            if source_wheel is None:
+                raise FileNotFoundError(
+                    f"[tool.uv.sources] wheel not found for {_requirement_key(requirement)!r}: "
+                    f"{source_path!r} (searched under {output_dir} and {project_root})"
+                )
+            bundled_dependencies.append(
+                _bundle_wheel_requirement(
+                    _package_name_from_requirement(requirement),
+                    source_wheel,
+                    wheels_dir,
+                    copied=copied,
+                )
+            )
+            continue
+
+        bundled_dependencies.append(requirement)
+
+    return ArtifactDependencySpec(
+        name=spec.name,
+        version=spec.version,
+        requires_python=spec.requires_python,
+        dependencies=tuple(bundled_dependencies),
+        description=spec.description,
+    )
+
+
 def _merge_requirements(
     *requirement_groups: Iterable[str],
     overrides: Iterable[str] = (),
@@ -70,17 +278,6 @@ def _merge_requirements(
         if key:
             merged[key] = requirement.strip()
     return tuple(merged.values())
-
-
-@dataclass(frozen=True)
-class ArtifactDependencySpec:
-    """PEP 621 project metadata written into a model artifact directory."""
-
-    name: str
-    version: str = "0.1.0"
-    requires_python: str = ">=3.11"
-    dependencies: tuple[str, ...] = ()
-    description: str = "Raine model artifact runtime environment"
 
 
 def find_project_root(start: Path | None = None) -> Path:
@@ -310,7 +507,17 @@ def materialize_artifact_dependencies(
 
     When ``write_lock`` is true and ``uv`` is not on ``PATH``, emits a warning and
     skips ``pylock.toml`` instead of failing export.
+
+    Local wheel references (PEP 508 ``@ file:...`` or ``[tool.uv.sources]`` paths
+    ending in ``.whl``) are copied into ``wheels/`` and rewritten as portable
+    ``file:./wheels/<name>.whl`` requirements in the artifact ``pyproject.toml``.
     """
+    resolved_root, resolved_pyproject = resolve_dependency_project(
+        project_root=project_root,
+        pyproject_toml_path=pyproject_toml_path,
+        start=start,
+    )
+    metadata = read_project_metadata_at(resolved_pyproject)
     spec = merge_project_dependencies(
         project_root,
         pyproject_toml_path=pyproject_toml_path,
@@ -319,6 +526,12 @@ def materialize_artifact_dependencies(
         groups=groups,
         extra_dependencies=extra_dependencies,
         include_base=include_base,
+    )
+    spec = bundle_local_wheels(
+        spec,
+        output_dir,
+        project_root=resolved_root,
+        metadata=metadata,
     )
     write_artifact_pyproject(output_dir, spec)
     if write_lock:
