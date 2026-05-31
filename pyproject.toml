@@ -1,14 +1,14 @@
 [project]
 name = "raine"
-version = "0.1.1"
+version = "0.1.2"
 description = "MLOps toolkit"
 readme = "README.md"
 license = "Apache-2.0"
 authors = [{ name = "Edward Cui", email = "cui23327@gmail.com" }]
 requires-python = ">=3.11,<3.14"
 dependencies = [
-    "dynaconf==3.2.13",
-    "pyyaml>=6.0.3",
+    "dynaconf>=3.0.0,<4.0.0",
+    "pyyaml>=6.0.0,<7.0.0",
 ]
 
 [project.optional-dependencies]
