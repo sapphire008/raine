@@ -1,10 +1,10 @@
 [project]
 name = "raine"
-version = "0.1.1"
-description = "MLOps toolkit with reusable Kubeflow components"
+version = "0.1.0"
+description = "MLOps toolkit"
 readme = "README.md"
 license = "Apache-2.0"
-authors = [{ name = "sapphire008", email = "cui23327@gmail.com" }]
+authors = [{ name = "Edward Cui", email = "cui23327@gmail.com" }]
 requires-python = ">=3.11,<3.14"
 dependencies = [
     "numpy (>=2.0,<3.0)",
