@@ -31,7 +31,7 @@ my_model/
 └── pylock.toml        # locked dependency export (uv)
 ```
 
-At serving time, load the bundle in `setup()` via `ModelContext` and resolve assets by logical name (`ctx.artifact("weights")`), similar to MLflow's `PythonModelContext`.
+At serving time, load the handler with `from_bundle`. In `setup()`, access bundle assets via `self.context.artifacts`, similar to MLflow's `PythonModelContext`.
 
 ## Quick start
 
@@ -42,15 +42,16 @@ import litserve as ls
 from raine.serve.artifacts import RaineModel
 
 class MyInferenceAPI(RaineModel, ls.LitAPI):
-    def __init__(self, model_dir: str | None = None):
+    def __init__(self):
         super().__init__(max_batch_size=1)
-        self.model_dir = model_dir
 
     def setup(self, device):
-        ctx = self.load_model_context(self.model_dir)
-        weights = ctx.artifact("weights")
-        config = ctx.artifact("config")
+        weights = self.context.artifacts["weights"]
+        config = self.context.artifacts["config"]
         ...
+
+api = MyInferenceAPI.from_bundle("/path/to/my_model", max_batch_size=1)
+ls.LitServer(api).run(port=8080)
 ```
 
 Export from a dedicated script:
@@ -79,17 +80,18 @@ handler.save_model(
 
 ### Local testing without a full export
 
-Use `staged_model_bundle` to symlink artifacts and code into a bundle layout for dev servers and tests:
+Use `staged_handler` to symlink a bundle layout and yield a loaded handler:
 
 ```python
-from raine.serve.artifacts import staged_model_bundle
+from raine.serve.artifacts import staged_handler
 
-with staged_model_bundle(
+with staged_handler(
+    MyInferenceAPI,
     artifacts={"weights": weights_path, "config": config_path},
     source_dir=handler_dir,
     code_renames={"inference_en.py": "inference.py"},
-) as bundle_dir:
-    api = MyInferenceAPI(model_dir=str(bundle_dir))
+    max_batch_size=1,
+) as api:
     ls.LitServer(api).run(port=8080)
 ```
 

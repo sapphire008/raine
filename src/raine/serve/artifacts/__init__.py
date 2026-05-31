@@ -30,7 +30,7 @@ from raine.serve.artifacts.deps_trace import (
     write_artifact_pylock,
     write_artifact_pyproject,
 )
-from raine.serve.artifacts.helper import stage_model_bundle_at, staged_model_bundle
+from raine.serve.artifacts.helper import stage_model_bundle_at, staged_handler, staged_model_bundle
 from raine.serve.artifacts.utils import (
     build_search_paths,
     handler_module_dir,
@@ -64,6 +64,7 @@ __all__ = [
     "read_artifacts_index",
     "resolve_dependency_project",
     "stage_model_bundle_at",
+    "staged_handler",
     "staged_model_bundle",
     "trace_imported_distributions",
     "write_artifact_pylock",

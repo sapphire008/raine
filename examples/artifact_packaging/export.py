@@ -6,6 +6,7 @@ from inference import MyInferenceAPI
 EXAMPLE_ROOT = Path(__file__).resolve().parent
 OUTPUT_DIR = EXAMPLE_ROOT / "exported" / "my_model"
 
+from pdb import set_trace
 
 def main() -> Path:
     handler = MyInferenceAPI()
@@ -19,8 +20,12 @@ def main() -> Path:
             "inference.py": "api.py",  # rename code
         }
     )
+    
+def load(bundle_dir: str | Path):
+    handler = MyInferenceAPI.load_model(bundle_dir)
 
 
 if __name__ == "__main__":
     bundle_dir = main()
     print(f"Wrote model bundle to {bundle_dir}")
+    load(bundle_dir)

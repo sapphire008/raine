@@ -5,7 +5,7 @@ from __future__ import annotations
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator, Mapping
+from typing import Any, Iterator, Mapping, TypeVar
 
 from raine.serve.artifacts.code_trace import link_staged_code_dir
 from raine.serve.artifacts.context import (
@@ -14,6 +14,35 @@ from raine.serve.artifacts.context import (
     link_bundle_artifacts,
     write_artifacts_index,
 )
+
+T = TypeVar("T")
+
+
+@contextmanager
+def staged_handler(
+    handler_cls: type[T],
+    *,
+    artifacts: Mapping[str, str | Path],
+    source_dir: str | Path | None = None,
+    metadata: Mapping[str, Any] | None = None,
+    code_renames: Mapping[str, str] | None = None,
+    bundle_root: str | Path | None = None,
+    configure_path: bool = True,
+    **handler_kwargs: Any,
+) -> Iterator[T]:
+    """Stage a bundle and yield a handler loaded via ``handler_cls.from_bundle``."""
+    with staged_model_bundle(
+        artifacts=artifacts,
+        source_dir=source_dir,
+        metadata=metadata,
+        code_renames=code_renames,
+        bundle_root=bundle_root,
+    ) as bundle_dir:
+        yield handler_cls.from_bundle(
+            bundle_dir,
+            configure_path=configure_path,
+            **handler_kwargs,
+        )
 
 
 def stage_model_bundle_at(

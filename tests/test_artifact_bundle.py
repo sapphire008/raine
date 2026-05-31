@@ -100,7 +100,7 @@ def test_model_context_from_uri_resolves_artifacts(tmp_path: Path, monkeypatch: 
 
     ctx = ModelContext.from_uri(bundle_root)
 
-    assert ctx.artifact("weights") == (bundle_root / "artifacts/weights.pt").resolve()
+    assert ctx.artifacts["weights"] == (bundle_root / "artifacts/weights.pt").resolve()
     assert ctx.metadata["model_class"] == "models.Example"
     assert inserted_paths == [bundle_root / "code"]
 
@@ -171,9 +171,9 @@ def test_save_model_writes_bundle_layout(tmp_path: Path, monkeypatch: pytest.Mon
     assert (output_dir / "artifacts/weights.pt").is_file()
     assert (output_dir / "code/marker.txt").is_file()
 
-    ctx = RaineModel.load_model_context(output_dir, configure_path=False)
-    assert ctx.artifact("weights").name == "weights.pt"
-    assert ctx.artifact("config").name == "config.json"
+    handler = DummyHandler.from_bundle(output_dir, configure_path=False)
+    assert handler.context.artifacts["weights"].name == "weights.pt"
+    assert handler.context.artifacts["config"].name == "config.json"
 
 
 def test_save_model_passes_dependency_groups(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -299,10 +299,30 @@ def test_save_model_passes_pyproject_toml_path(tmp_path: Path, monkeypatch: pyte
     assert captured["pyproject_toml_path"] == pyproject_path
 
 
+def test_from_bundle_sets_context(tmp_path: Path) -> None:
+    bundle_root = tmp_path / "bundle"
+    bundle_root.mkdir()
+    (bundle_root / "artifacts").mkdir()
+    (bundle_root / "artifacts" / "weights.pt").write_text("weights", encoding="utf-8")
+    write_artifacts_index(
+        bundle_root,
+        ArtifactBundle(artifacts={"weights": "artifacts/weights.pt"}),
+    )
+
+    handler = DummyHandler.from_bundle(bundle_root, configure_path=False)
+    assert handler.context.artifacts["weights"].read_text(encoding="utf-8") == "weights"
+
+
+def test_context_raises_before_from_bundle() -> None:
+    handler = DummyHandler()
+    with pytest.raises(RuntimeError, match="from_bundle"):
+        _ = handler.context
+
+
 def test_model_context_missing_artifact_raises(tmp_path: Path) -> None:
     bundle_root = tmp_path / "bundle"
     write_artifacts_index(bundle_root, ArtifactBundle(artifacts={}))
 
     ctx = ModelContext.from_uri(bundle_root, configure_path=False)
     with pytest.raises(KeyError, match="weights"):
-        ctx.artifact("weights")
+        _ = ctx.artifacts["weights"]

@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 
 from raine.serve.artifacts.context import ModelContext, read_artifacts_index
-from raine.serve.artifacts.helper import stage_model_bundle_at, staged_model_bundle
+from raine.serve.artifacts.artifacts import RaineModel
+from raine.serve.artifacts.helper import stage_model_bundle_at, staged_handler, staged_model_bundle
 
 
 def test_stage_model_bundle_at_symlinks_artifacts_and_code(tmp_path: Path) -> None:
@@ -45,7 +46,7 @@ def test_stage_model_bundle_at_symlinks_artifacts_and_code(tmp_path: Path) -> No
     assert bundle.metadata == {"mode": "test"}
 
     ctx = ModelContext.from_uri(bundle_root, configure_path=False)
-    assert ctx.artifact("weights").resolve() == weights.resolve()
+    assert ctx.artifacts["weights"].resolve() == weights.resolve()
 
 
 def test_staged_model_bundle_cleans_up_temp_dir() -> None:
@@ -102,3 +103,15 @@ def test_staged_model_bundle_with_explicit_root(tmp_path: Path) -> None:
         assert (bundle_root / "artifacts.json").is_file()
 
     assert bundle_root.exists()
+
+
+def test_staged_handler_yields_loaded_handler(tmp_path: Path) -> None:
+    weights = tmp_path / "weights.pt"
+    weights.write_text("weights", encoding="utf-8")
+
+    with staged_handler(
+        RaineModel,
+        artifacts={"weights": weights},
+        configure_path=False,
+    ) as handler:
+        assert handler.context.artifacts["weights"].read_text(encoding="utf-8") == "weights"

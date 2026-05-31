@@ -3,8 +3,7 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Mapping, Sequence
-
+from typing import Any, Mapping, Sequence, TypeVar
 
 from raine.serve.artifacts.code_trace import materialize_artifact_code
 from raine.serve.artifacts.context import (
@@ -22,9 +21,23 @@ from raine.serve.artifacts.utils import (
 
 
 
+T = TypeVar("T", bound="RaineModel")
+
+
 class RaineModel:
     def __init__(self, *args, **kwargs):
+        self._context: ModelContext | None = None
         super().__init__(*args, **kwargs)
+
+    @property
+    def context(self) -> ModelContext:
+        """Runtime bundle context, set by :meth:`from_bundle`."""
+        if self._context is None:
+            raise RuntimeError(
+                "Model bundle not loaded; construct the handler with "
+                f"{type(self).__name__}.from_bundle(model_uri, ...)"
+            )
+        return self._context
 
     @staticmethod
     def load_model_class(model_class: str):
@@ -35,10 +48,19 @@ class RaineModel:
 
     @classmethod
     def load_model(
-        cls, model_uri: str | Path, *, configure_path: bool = True
-    ) -> ModelContext:
-        """Load a saved model bundle and return its runtime context."""
-        return ModelContext.from_uri(model_uri, configure_path=configure_path)
+        cls: type[T],
+        model_uri: str | Path,
+        *args: Any,
+        configure_path: bool = True,
+        **kwargs: Any,
+    ) -> T:
+        """Construct a handler with ``self.context`` bound to a saved bundle."""
+        instance = cls(*args, **kwargs)
+        instance._context = ModelContext.from_uri(
+            model_uri,
+            configure_path=configure_path,
+        )
+        return instance
 
     def save_model(
         self,
