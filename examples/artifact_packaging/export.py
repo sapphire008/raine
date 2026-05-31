@@ -1,17 +1,23 @@
-"""Script to export a package of inference"""
+"""Export a deployable model bundle for the artifact_packaging example."""
 from pathlib import Path
+
 from inference import MyInferenceAPI
 
 EXAMPLE_ROOT = Path(__file__).resolve().parent
+OUTPUT_DIR = EXAMPLE_ROOT / "my_model"
 
 
-handler = MyInferenceAPI()
-handler.save_model(
-    output_dir="./my_model",
-    artifacts={
-        "configs": "./trained_model/configs.json",
-        "weights": "./trained_model/weights",
-    },
-    source_dir=EXAMPLE_ROOT / "my_model",
-    project_root=EXAMPLE_ROOT, # example pyproject, not raine repo
-)
+def main() -> Path:
+    handler = MyInferenceAPI()
+    return handler.save_model(
+        output_dir=OUTPUT_DIR,
+        artifacts={
+            "config": EXAMPLE_ROOT / "trained_model/configs.json",
+            "weights": EXAMPLE_ROOT / "trained_model/weights",
+        },
+    )
+
+
+if __name__ == "__main__":
+    bundle_dir = main()
+    print(f"Wrote model bundle to {bundle_dir}")

@@ -14,6 +14,7 @@ from raine.serving.artifacts.context import (
     ArtifactBundle,
     ModelContext,
     configure_code_path,
+    link_bundle_artifacts,
     materialize_bundle_artifacts,
     read_artifacts_index,
     write_artifacts_index,
@@ -21,13 +22,20 @@ from raine.serving.artifacts.context import (
 from raine.serving.artifacts.deps_trace import (
     ArtifactDependencySpec,
     export_pylock_toml,
+    find_project_root,
     materialize_artifact_dependencies,
     merge_project_dependencies,
+    resolve_dependency_project,
     trace_imported_distributions,
     write_artifact_pylock,
     write_artifact_pyproject,
 )
-from raine.serving.artifacts.utils import build_search_paths, local_roots_from_seeds
+from raine.serving.artifacts.helper import stage_model_bundle_at, staged_model_bundle
+from raine.serving.artifacts.utils import (
+    build_search_paths,
+    handler_module_dir,
+    local_roots_from_seeds,
+)
 
 __all__ = [
     "ARTIFACTS_DIR_NAME",
@@ -40,11 +48,14 @@ __all__ = [
     "ModelContext",
     "RaineModel",
     "build_search_paths",
+    "handler_module_dir",
     "collect_local_modules",
     "configure_code_path",
     "copy_local_code_paths",
     "export_pylock_toml",
+    "find_project_root",
     "is_third_party_module",
+    "link_bundle_artifacts",
     "local_roots_from_seeds",
     "materialize_artifact_code",
     "materialize_artifact_dependencies",
@@ -52,6 +63,9 @@ __all__ = [
     "merge_project_dependencies",
     "module_source_files",
     "read_artifacts_index",
+    "resolve_dependency_project",
+    "stage_model_bundle_at",
+    "staged_model_bundle",
     "trace_imported_distributions",
     "write_artifact_pylock",
     "write_artifact_pyproject",

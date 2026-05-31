@@ -17,8 +17,12 @@ from raine.serving.artifacts.context import (
     materialize_bundle_artifacts,
     write_artifacts_index,
 )
-from raine.serving.artifacts.deps_trace import find_project_root, materialize_artifact_dependencies
-from raine.serving.artifacts.utils import build_search_paths, local_roots_from_seeds
+from raine.serving.artifacts.deps_trace import materialize_artifact_dependencies
+from raine.serving.artifacts.utils import (
+    build_search_paths,
+    handler_module_dir,
+    local_roots_from_seeds,
+)
 
 
 @dataclass
@@ -80,6 +84,7 @@ class RaineModel:
         dependency_extras: Sequence[str] = ("serve", "torch"),
         dependency_groups: Sequence[str] = (),
         project_root: str | Path | None = None,
+        pyproject_toml_path: str | Path | None = None,
     ) -> Path:
         """Package this handler into a deployable artifact directory.
 
@@ -95,7 +100,9 @@ class RaineModel:
             artifacts: Logical artifact names mapped to source files or directories.
                 Sources may live anywhere; copies are normalized under ``artifacts/``.
             metadata: Optional user-defined metadata persisted in ``artifacts.json``.
-            source_dir: Optional directory added to code-tracing search paths.
+            source_dir: Optional directory for code tracing. Defaults to the
+                directory containing this handler class's module (e.g. the folder
+                with ``inference.py``).
             code_seeds: Extra modules or classes to include in code tracing.
                 Local package roots are inferred from this handler class and
                 any ``code_seeds`` modules.
@@ -105,9 +112,12 @@ class RaineModel:
             dependency_groups: Names of ``[dependency-groups]`` from the source
                 ``pyproject.toml`` to merge into the artifact environment (uv/pip
                 dependency groups, installed via ``uv sync --group``).
-            project_root: Root of the project whose ``pyproject.toml`` defines
-                runtime dependencies. Defaults to the nearest directory
-                containing ``pyproject.toml``.
+            project_root: Project whose ``pyproject.toml`` defines runtime deps.
+                Defaults to the nearest ``pyproject.toml`` above the handler
+                module directory. Ignored when ``pyproject_toml_path`` is set.
+            pyproject_toml_path: Explicit path to a ``pyproject.toml`` for
+                dependency export. When set, takes precedence over
+                ``project_root`` search.
 
         Returns:
             Resolved path to ``output_dir``.
@@ -115,13 +125,19 @@ class RaineModel:
         output_dir = Path(output_dir).resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        handler_module_path = handler_module_dir(type(self))
         resolved_project_root = (
-            Path(project_root).resolve()
-            if project_root is not None
-            else find_project_root()
+            Path(project_root).resolve() if project_root is not None else None
         )
-        resolved_source_dir = Path(source_dir).resolve() if source_dir is not None else None
-        search_paths = build_search_paths(resolved_source_dir, resolved_project_root)
+        resolved_pyproject_toml = (
+            Path(pyproject_toml_path).resolve() if pyproject_toml_path is not None else None
+        )
+        resolved_source_dir = (
+            Path(source_dir).resolve()
+            if source_dir is not None
+            else handler_module_path
+        )
+        search_paths = build_search_paths(resolved_source_dir)
 
         resolved_metadata = dict(metadata or {})
         seeds: list[type | str | ModuleType] = [type(self)]
@@ -138,6 +154,8 @@ class RaineModel:
         materialize_artifact_dependencies(
             output_dir,
             resolved_project_root,
+            pyproject_toml_path=resolved_pyproject_toml,
+            start=handler_module_path,
             extras=dependency_extras,
             groups=dependency_groups,
             include_base=True,

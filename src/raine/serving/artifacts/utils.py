@@ -1,25 +1,25 @@
 from __future__ import annotations
 
+import importlib.util
+import inspect
 from pathlib import Path
 from types import ModuleType
 from typing import Sequence
 
 
-def build_search_paths(
-    source_dir: Path | None,
-    project_root: Path | None,
-) -> tuple[Path, ...]:
-    paths: list[Path] = []
-    if source_dir is not None:
-        paths.append(source_dir.resolve())
-    if project_root is not None:
-        src_root = project_root / "src"
-        if src_root.is_dir():
-            paths.append(src_root.resolve())
-    cwd = Path.cwd().resolve()
-    if cwd not in paths:
-        paths.append(cwd)
-    return tuple(paths)
+def build_search_paths(source_dir: Path) -> tuple[Path, ...]:
+    """Return code-tracing anchor paths rooted at the handler project directory."""
+    return (source_dir.resolve(),)
+
+
+def handler_module_dir(handler: type) -> Path:
+    """Return the directory containing the handler class's module file."""
+    module_name = getattr(handler, "__module__", None)
+    if module_name and module_name != "__main__":
+        spec = importlib.util.find_spec(module_name)
+        if spec is not None and spec.origin not in (None, "built-in", "frozen"):
+            return Path(spec.origin).resolve().parent
+    return Path(inspect.getfile(handler)).resolve().parent
 
 
 def _module_name_from_seed(seed: type | str | ModuleType) -> str | None:

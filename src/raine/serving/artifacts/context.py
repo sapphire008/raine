@@ -112,11 +112,35 @@ def _relative_artifact_path(key: str, source: Path) -> str:
     return f"{ARTIFACTS_DIR_NAME}/{key}{suffix}"
 
 
-def materialize_bundle_artifacts(
+def _place_bundle_artifact(
+    source: Path,
+    destination: Path,
+    *,
+    use_symlinks: bool,
+) -> None:
+    if destination.exists() or destination.is_symlink():
+        if destination.is_dir() and not destination.is_symlink():
+            shutil.rmtree(destination)
+        else:
+            destination.unlink()
+
+    if use_symlinks:
+        destination.symlink_to(source, target_is_directory=source.is_dir())
+        return
+
+    if source.is_dir():
+        shutil.copytree(source, destination)
+    else:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+
+
+def _materialize_bundle_artifacts(
     bundle_root: Path,
     artifacts: Mapping[str, str | Path],
+    *,
+    use_symlinks: bool,
 ) -> dict[str, str]:
-    """Copy user artifacts into ``bundle_root/artifacts`` and return the relative index."""
     if not artifacts:
         return {}
 
@@ -137,22 +161,32 @@ def materialize_bundle_artifacts(
         if relative_path in destinations and destinations[relative_path] != key:
             raise ValueError(
                 f"Artifacts {destinations[relative_path]!r} and {key!r} "
-                f"would both copy to {relative_path}"
+                f"would both map to {relative_path}"
             )
 
         destination = bundle_root / relative_path
-        if source.is_dir():
-            if destination.exists():
-                shutil.rmtree(destination)
-            shutil.copytree(source, destination)
-        else:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
+        _place_bundle_artifact(source, destination, use_symlinks=use_symlinks)
 
         index[key] = relative_path
         destinations[relative_path] = key
 
     return index
+
+
+def materialize_bundle_artifacts(
+    bundle_root: Path,
+    artifacts: Mapping[str, str | Path],
+) -> dict[str, str]:
+    """Copy user artifacts into ``bundle_root/artifacts`` and return the relative index."""
+    return _materialize_bundle_artifacts(bundle_root, artifacts, use_symlinks=False)
+
+
+def link_bundle_artifacts(
+    bundle_root: Path,
+    artifacts: Mapping[str, str | Path],
+) -> dict[str, str]:
+    """Symlink user artifacts into ``bundle_root/artifacts`` and return the relative index."""
+    return _materialize_bundle_artifacts(bundle_root, artifacts, use_symlinks=True)
 
 
 def write_artifacts_index(bundle_root: Path, bundle: ArtifactBundle) -> Path:

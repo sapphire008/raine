@@ -34,22 +34,62 @@ def find_project_root(start: Path | None = None) -> Path:
     raise FileNotFoundError(f"No pyproject.toml found at or above {path}")
 
 
-def read_project_metadata(project_root: Path | None = None) -> dict:
-    project_root = find_project_root(project_root)
-    with (project_root / "pyproject.toml").open("rb") as handle:
+def resolve_dependency_project(
+    *,
+    project_root: Path | None = None,
+    pyproject_toml_path: Path | None = None,
+    start: Path | None = None,
+) -> tuple[Path, Path]:
+    """Return ``(project_root, pyproject.toml path)`` for dependency export."""
+    if pyproject_toml_path is not None:
+        resolved_pyproject = Path(pyproject_toml_path).resolve()
+        if resolved_pyproject.name != "pyproject.toml":
+            raise ValueError(
+                f"pyproject_toml_path must point to pyproject.toml, got {resolved_pyproject.name!r}"
+            )
+        if not resolved_pyproject.is_file():
+            raise FileNotFoundError(f"pyproject.toml not found: {resolved_pyproject}")
+        return resolved_pyproject.parent, resolved_pyproject
+
+    resolved_root = find_project_root(project_root or start)
+    return resolved_root, resolved_root / "pyproject.toml"
+
+
+def read_project_metadata_at(pyproject_path: Path) -> dict:
+    with pyproject_path.open("rb") as handle:
         return tomllib.load(handle)
+
+
+def read_project_metadata(
+    project_root: Path | None = None,
+    *,
+    pyproject_toml_path: Path | None = None,
+    start: Path | None = None,
+) -> dict:
+    _, resolved_pyproject = resolve_dependency_project(
+        project_root=project_root,
+        pyproject_toml_path=pyproject_toml_path,
+        start=start,
+    )
+    return read_project_metadata_at(resolved_pyproject)
 
 
 def merge_project_dependencies(
     project_root: Path | None = None,
     *,
+    pyproject_toml_path: Path | None = None,
+    start: Path | None = None,
     extras: Sequence[str] = (),
     groups: Sequence[str] = (),
     include_base: bool = True,
 ) -> ArtifactDependencySpec:
     """Merge base, optional, and dependency-group specs from the source project."""
-    project_root = find_project_root(project_root)
-    metadata = read_project_metadata(project_root)
+    _, resolved_pyproject = resolve_dependency_project(
+        project_root=project_root,
+        pyproject_toml_path=pyproject_toml_path,
+        start=start,
+    )
+    metadata = read_project_metadata_at(resolved_pyproject)
     project = metadata.get("project", {})
 
     merged: list[str] = []
@@ -113,20 +153,26 @@ def write_artifact_pyproject(output_dir: Path, spec: ArtifactDependencySpec) -> 
 def export_pylock_toml(
     project_root: Path | None = None,
     *,
+    pyproject_toml_path: Path | None = None,
+    start: Path | None = None,
     extras: Sequence[str] = (),
     groups: Sequence[str] = (),
     include_base: bool = True,
     no_dev: bool = True,
 ) -> str:
     """Export a PEP 751 lockfile from the source project using ``uv export``."""
-    project_root = find_project_root(project_root)
+    resolved_root, _ = resolve_dependency_project(
+        project_root=project_root,
+        pyproject_toml_path=pyproject_toml_path,
+        start=start,
+    )
     command = [
         "uv",
         "export",
         "--format",
         "pylock.toml",
         "--directory",
-        str(project_root),
+        str(resolved_root),
         "--no-default-groups",
     ]
     if no_dev:
@@ -149,6 +195,8 @@ def write_artifact_pylock(
     output_dir: Path,
     project_root: Path | None = None,
     *,
+    pyproject_toml_path: Path | None = None,
+    start: Path | None = None,
     extras: Sequence[str] = (),
     groups: Sequence[str] = (),
     include_base: bool = True,
@@ -158,6 +206,8 @@ def write_artifact_pylock(
     path.write_text(
         export_pylock_toml(
             project_root,
+            pyproject_toml_path=pyproject_toml_path,
+            start=start,
             extras=extras,
             groups=groups,
             include_base=include_base,
@@ -171,15 +221,18 @@ def materialize_artifact_dependencies(
     output_dir: Path,
     project_root: Path | None = None,
     *,
+    pyproject_toml_path: Path | None = None,
+    start: Path | None = None,
     extras: Sequence[str] = (),
     groups: Sequence[str] = (),
     include_base: bool = True,
     write_lock: bool = True,
 ) -> ArtifactDependencySpec:
     """Write ``pyproject.toml`` and optionally ``pylock.toml`` into an artifact directory."""
-    project_root = find_project_root(project_root)
     spec = merge_project_dependencies(
         project_root,
+        pyproject_toml_path=pyproject_toml_path,
+        start=start,
         extras=extras,
         groups=groups,
         include_base=include_base,
@@ -189,6 +242,8 @@ def materialize_artifact_dependencies(
         write_artifact_pylock(
             output_dir,
             project_root,
+            pyproject_toml_path=pyproject_toml_path,
+            start=start,
             extras=extras,
             groups=groups,
             include_base=include_base,

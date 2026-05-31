@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from raine.serving.artifacts.artifacts import RaineModel
-from raine.serving.artifacts.utils import local_roots_from_seeds
+from raine.serving.artifacts.utils import handler_module_dir, local_roots_from_seeds
 from raine.serving.artifacts.context import (
     ARTIFACTS_INDEX_NAME,
     ArtifactBundle,
@@ -19,6 +19,10 @@ from raine.serving.artifacts.context import (
 
 class DummyHandler(RaineModel):
     pass
+
+
+def test_handler_module_dir_uses_handler_file_directory() -> None:
+    assert handler_module_dir(DummyHandler) == Path(__file__).resolve().parent
 
 
 def test_local_roots_from_seeds_uses_handler_module() -> None:
@@ -124,6 +128,8 @@ def test_save_model_writes_bundle_layout(tmp_path: Path, monkeypatch: pytest.Mon
         destination_root,
         project_root,
         *,
+        pyproject_toml_path,
+        start,
         extras,
         groups,
         include_base,
@@ -131,6 +137,8 @@ def test_save_model_writes_bundle_layout(tmp_path: Path, monkeypatch: pytest.Mon
     ):
         captured["dependency_extras"] = extras
         captured["dependency_groups"] = groups
+        captured["pyproject_toml_path"] = pyproject_toml_path
+        captured["start"] = start
         return None
 
     monkeypatch.setattr(
@@ -140,10 +148,6 @@ def test_save_model_writes_bundle_layout(tmp_path: Path, monkeypatch: pytest.Mon
     monkeypatch.setattr(
         "raine.serving.artifacts.artifacts.materialize_artifact_dependencies",
         fake_materialize_deps,
-    )
-    monkeypatch.setattr(
-        "raine.serving.artifacts.artifacts.find_project_root",
-        lambda: project_root,
     )
 
     handler = DummyHandler()
@@ -186,6 +190,8 @@ def test_save_model_passes_dependency_groups(tmp_path: Path, monkeypatch: pytest
         destination_root,
         project_root,
         *,
+        pyproject_toml_path,
+        start,
         extras,
         groups,
         include_base,
@@ -193,6 +199,8 @@ def test_save_model_passes_dependency_groups(tmp_path: Path, monkeypatch: pytest
     ):
         captured["dependency_extras"] = extras
         captured["dependency_groups"] = groups
+        captured["pyproject_toml_path"] = pyproject_toml_path
+        captured["start"] = start
 
     monkeypatch.setattr(
         "raine.serving.artifacts.artifacts.materialize_artifact_code",
@@ -201,10 +209,6 @@ def test_save_model_passes_dependency_groups(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr(
         "raine.serving.artifacts.artifacts.materialize_artifact_dependencies",
         fake_materialize_deps,
-    )
-    monkeypatch.setattr(
-        "raine.serving.artifacts.artifacts.find_project_root",
-        lambda: project_root,
     )
 
     DummyHandler().save_model(
@@ -222,9 +226,10 @@ def test_merge_project_dependencies_extras_vs_groups() -> None:
     from raine.serving.artifacts.deps_trace import merge_project_dependencies
 
     project_root = Path(__file__).resolve().parents[1]
+    pyproject_path = project_root / "pyproject.toml"
 
     from_extras = merge_project_dependencies(
-        project_root,
+        pyproject_toml_path=pyproject_path,
         extras=("serve", "torch"),
         include_base=False,
     )
@@ -232,11 +237,66 @@ def test_merge_project_dependencies_extras_vs_groups() -> None:
     assert "torch==2.8.0" in from_extras.dependencies
 
     from_groups = merge_project_dependencies(
-        project_root,
+        pyproject_toml_path=pyproject_path,
         groups=("dev",),
         include_base=False,
     )
     assert any("pytest" in requirement for requirement in from_groups.dependencies)
+
+
+def test_resolve_dependency_project_prefers_explicit_pyproject() -> None:
+    from raine.serving.artifacts.deps_trace import resolve_dependency_project
+
+    project_root = Path(__file__).resolve().parents[1]
+    pyproject_path = project_root / "pyproject.toml"
+
+    resolved_root, resolved_path = resolve_dependency_project(
+        pyproject_toml_path=pyproject_path,
+    )
+    assert resolved_root == project_root
+    assert resolved_path == pyproject_path
+
+
+def test_save_model_passes_pyproject_toml_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project_root = Path(__file__).resolve().parents[1]
+    pyproject_path = project_root / "pyproject.toml"
+    output_dir = tmp_path / "model-bundle"
+    weights = tmp_path / "weights.pt"
+    weights.write_text("weights", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    def fake_materialize_code(*args, **kwargs):
+        return type("Result", (), {"destination": output_dir / "code"})()
+
+    def fake_materialize_deps(
+        destination_root,
+        project_root,
+        *,
+        pyproject_toml_path,
+        start,
+        extras,
+        groups,
+        include_base,
+        write_lock=True,
+    ):
+        captured["pyproject_toml_path"] = pyproject_toml_path
+
+    monkeypatch.setattr(
+        "raine.serving.artifacts.artifacts.materialize_artifact_code",
+        fake_materialize_code,
+    )
+    monkeypatch.setattr(
+        "raine.serving.artifacts.artifacts.materialize_artifact_dependencies",
+        fake_materialize_deps,
+    )
+
+    DummyHandler().save_model(
+        output_dir,
+        artifacts={"weights": weights},
+        pyproject_toml_path=pyproject_path,
+    )
+
+    assert captured["pyproject_toml_path"] == pyproject_path
 
 
 def test_model_context_missing_artifact_raises(tmp_path: Path) -> None:
