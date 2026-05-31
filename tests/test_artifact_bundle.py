@@ -132,11 +132,13 @@ def test_save_model_writes_bundle_layout(tmp_path: Path, monkeypatch: pytest.Mon
         start,
         extras,
         groups,
+        extra_dependencies=(),
         include_base,
         write_lock=True,
     ):
         captured["dependency_extras"] = extras
         captured["dependency_groups"] = groups
+        captured["extra_dependencies"] = extra_dependencies
         captured["pyproject_toml_path"] = pyproject_toml_path
         captured["start"] = start
         return None
@@ -194,11 +196,13 @@ def test_save_model_passes_dependency_groups(tmp_path: Path, monkeypatch: pytest
         start,
         extras,
         groups,
+        extra_dependencies=(),
         include_base,
         write_lock=True,
     ):
         captured["dependency_extras"] = extras
         captured["dependency_groups"] = groups
+        captured["extra_dependencies"] = extra_dependencies
         captured["pyproject_toml_path"] = pyproject_toml_path
         captured["start"] = start
 
@@ -244,6 +248,84 @@ def test_merge_project_dependencies_extras_vs_groups() -> None:
     assert any("pytest" in requirement for requirement in from_groups.dependencies)
 
 
+def test_merge_project_dependencies_extra_dependencies_override() -> None:
+    from raine.serve.artifacts.deps_trace import merge_project_dependencies
+
+    project_root = Path(__file__).resolve().parents[1]
+    pyproject_path = project_root / "pyproject.toml"
+
+    spec = merge_project_dependencies(
+        pyproject_toml_path=pyproject_path,
+        extras=("serve",),
+        include_base=False,
+        extra_dependencies=("litserve==0.1.0", "raine"),
+    )
+    assert spec.dependencies == ("litserve==0.1.0", "raine")
+
+
+def test_normalize_requires_python_bare_version() -> None:
+    from raine.serve.artifacts.deps_trace import (
+        ArtifactDependencySpec,
+        format_pyproject_toml,
+        normalize_requires_python,
+    )
+
+    assert normalize_requires_python("3.13.12") == "==3.13.12"
+    assert normalize_requires_python(">=3.11,<3.14") == ">=3.11,<3.14"
+    assert normalize_requires_python("==3.13.12") == "==3.13.12"
+
+    rendered = format_pyproject_toml(
+        ArtifactDependencySpec(
+            name="demo-artifact",
+            requires_python="3.13.12",
+            dependencies=("raine",),
+        )
+    )
+    assert 'requires-python = "==3.13.12"' in rendered
+
+
+def test_save_model_passes_extra_dependencies(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    output_dir = tmp_path / "model-bundle"
+    weights = tmp_path / "weights.pt"
+    weights.write_text("weights", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    def fake_materialize_code(*args, **kwargs):
+        return type("Result", (), {"destination": output_dir / "code"})()
+
+    def fake_materialize_deps(
+        destination_root,
+        project_root,
+        *,
+        pyproject_toml_path,
+        start,
+        extras,
+        groups,
+        extra_dependencies=(),
+        include_base,
+        write_lock=True,
+    ):
+        captured["extra_dependencies"] = extra_dependencies
+
+    monkeypatch.setattr(
+        "raine.serve.artifacts.artifacts.materialize_artifact_code",
+        fake_materialize_code,
+    )
+    monkeypatch.setattr(
+        "raine.serve.artifacts.artifacts.materialize_artifact_dependencies",
+        fake_materialize_deps,
+    )
+
+    DummyHandler().save_model(
+        output_dir,
+        artifacts={"weights": weights},
+        dependency_extras=(),
+        extra_dependencies=("raine", "litserve==0.2.17"),
+    )
+
+    assert captured["extra_dependencies"] == ("raine", "litserve==0.2.17")
+
+
 def test_resolve_dependency_project_prefers_explicit_pyproject() -> None:
     from raine.serve.artifacts.deps_trace import resolve_dependency_project
 
@@ -276,6 +358,7 @@ def test_save_model_passes_pyproject_toml_path(tmp_path: Path, monkeypatch: pyte
         start,
         extras,
         groups,
+        extra_dependencies=(),
         include_base,
         write_lock=True,
     ):

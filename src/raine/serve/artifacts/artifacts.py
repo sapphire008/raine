@@ -72,6 +72,7 @@ class RaineModel:
         code_seeds: Sequence[type | str | ModuleType] | None = None,
         dependency_extras: Sequence[str] = ("serve", "torch"),
         dependency_groups: Sequence[str] = (),
+        extra_dependencies: Sequence[str] = (),
         project_root: str | Path | None = None,
         pyproject_toml_path: str | Path | None = None,
         code_renames: Mapping[str, str] | None = None,
@@ -102,6 +103,9 @@ class RaineModel:
             dependency_groups: Names of ``[dependency-groups]`` from the source
                 ``pyproject.toml`` to merge into the artifact environment (uv/pip
                 dependency groups, installed via ``uv sync --group``).
+            extra_dependencies: Additional PEP 508 requirements merged last into
+                the artifact environment. When a package name matches an entry
+                from base/extras/groups, the ``extra_dependencies`` value wins.
             project_root: Project whose ``pyproject.toml`` defines runtime deps.
                 Defaults to the nearest ``pyproject.toml`` above the handler
                 module directory. Ignored when ``pyproject_toml_path`` is set.
@@ -152,6 +156,7 @@ class RaineModel:
             start=handler_module_path,
             extras=dependency_extras,
             groups=dependency_groups,
+            extra_dependencies=extra_dependencies,
             include_base=True,
         )
 

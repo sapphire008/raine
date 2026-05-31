@@ -14,6 +14,52 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 
+_VERSION_SPECIFIER_MARKERS = (">=", "<=", "==", "!=", "~=", ">", "<")
+
+
+def normalize_requires_python(requires_python: str) -> str:
+    """Normalize ``requires-python`` to a PEP 440 version specifier.
+
+    Poetry and other tools reject bare versions such as ``3.13.12``; convert
+    those to exact pins like ``==3.13.12``. Values that already include a
+    specifier operator are returned unchanged.
+    """
+    normalized = requires_python.strip()
+    if not normalized:
+        return ">=3.11"
+    if any(marker in normalized for marker in _VERSION_SPECIFIER_MARKERS):
+        return normalized
+    return f"=={normalized}"
+
+
+def _requirement_key(requirement: str) -> str:
+    """Return a normalized package name for deduplication and overrides."""
+    token = requirement.strip().split("[", 1)[0]
+    for separator in ("===", "==", ">=", "<=", "!=", "~=", ">", "<", " @ "):
+        if separator in token:
+            token = token.split(separator, 1)[0]
+            break
+    return token.strip().lower().replace("_", "-")
+
+
+def _merge_requirements(
+    *requirement_groups: Iterable[str],
+    overrides: Iterable[str] = (),
+) -> tuple[str, ...]:
+    """Merge requirement strings, applying ``overrides`` last by package name."""
+    merged: dict[str, str] = {}
+    for requirements in requirement_groups:
+        for requirement in requirements:
+            key = _requirement_key(requirement)
+            if key and key not in merged:
+                merged[key] = requirement.strip()
+    for requirement in overrides:
+        key = _requirement_key(requirement)
+        if key:
+            merged[key] = requirement.strip()
+    return tuple(merged.values())
+
+
 @dataclass(frozen=True)
 class ArtifactDependencySpec:
     """PEP 621 project metadata written into a model artifact directory."""
@@ -81,6 +127,7 @@ def merge_project_dependencies(
     start: Path | None = None,
     extras: Sequence[str] = (),
     groups: Sequence[str] = (),
+    extra_dependencies: Sequence[str] = (),
     include_base: bool = True,
 ) -> ArtifactDependencySpec:
     """Merge base, optional, and dependency-group specs from the source project."""
@@ -92,32 +139,34 @@ def merge_project_dependencies(
     metadata = read_project_metadata_at(resolved_pyproject)
     project = metadata.get("project", {})
 
-    merged: list[str] = []
-    seen: set[str] = set()
-
-    def _add(requirements: Iterable[str]) -> None:
-        for requirement in requirements:
-            key = requirement.strip()
-            if key and key not in seen:
-                seen.add(key)
-                merged.append(key)
-
+    base_dependencies: list[str] = []
     if include_base:
-        _add(project.get("dependencies", []))
+        base_dependencies = list(project.get("dependencies", []))
 
     optional = project.get("optional-dependencies", {})
+    extra_requirements: list[str] = []
     for extra in extras:
-        _add(optional.get(extra, []))
+        extra_requirements.extend(optional.get(extra, []))
 
     dependency_groups = metadata.get("dependency-groups", {})
+    group_requirements: list[str] = []
     for group in groups:
-        _add(dependency_groups.get(group, []))
+        group_requirements.extend(dependency_groups.get(group, []))
+
+    merged = _merge_requirements(
+        base_dependencies,
+        extra_requirements,
+        group_requirements,
+        overrides=extra_dependencies,
+    )
 
     return ArtifactDependencySpec(
         name=f"{project.get('name', 'raine')}-artifact",
         version=str(project.get("version", "0.1.0")),
-        requires_python=str(project.get("requires-python", ">=3.11")),
-        dependencies=tuple(merged),
+        requires_python=normalize_requires_python(
+            str(project.get("requires-python", ">=3.11"))
+        ),
+        dependencies=merged,
         description=f"Runtime dependencies for {project.get('name', 'raine')} model artifacts",
     )
 
@@ -129,7 +178,7 @@ def format_pyproject_toml(spec: ArtifactDependencySpec) -> str:
         f'name = "{spec.name}"',
         f'version = "{spec.version}"',
         f'description = "{spec.description}"',
-        f'requires-python = "{spec.requires_python}"',
+        f'requires-python = "{normalize_requires_python(spec.requires_python)}"',
         "dependencies = [",
     ]
     for requirement in spec.dependencies:
@@ -148,6 +197,33 @@ def write_artifact_pyproject(output_dir: Path, spec: ArtifactDependencySpec) -> 
     path = output_dir / "pyproject.toml"
     path.write_text(format_pyproject_toml(spec), encoding="utf-8")
     return path
+
+
+def export_pylock_toml_from_directory(
+    output_dir: Path,
+    *,
+    no_dev: bool = True,
+) -> str:
+    """Export a PEP 751 lockfile from an artifact ``pyproject.toml`` using ``uv export``."""
+    command = [
+        "uv",
+        "export",
+        "--format",
+        "pylock.toml",
+        "--directory",
+        str(output_dir.resolve()),
+        "--no-default-groups",
+    ]
+    if no_dev:
+        command.append("--no-dev")
+
+    result = subprocess.run(
+        command,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
 
 
 def export_pylock_toml(
@@ -191,29 +267,11 @@ def export_pylock_toml(
     return result.stdout
 
 
-def write_artifact_pylock(
-    output_dir: Path,
-    project_root: Path | None = None,
-    *,
-    pyproject_toml_path: Path | None = None,
-    start: Path | None = None,
-    extras: Sequence[str] = (),
-    groups: Sequence[str] = (),
-    include_base: bool = True,
-) -> Path:
+def write_artifact_pylock(output_dir: Path) -> Path:
+    """Write ``pylock.toml`` from the artifact ``pyproject.toml`` in ``output_dir``."""
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "pylock.toml"
-    path.write_text(
-        export_pylock_toml(
-            project_root,
-            pyproject_toml_path=pyproject_toml_path,
-            start=start,
-            extras=extras,
-            groups=groups,
-            include_base=include_base,
-        ),
-        encoding="utf-8",
-    )
+    path.write_text(export_pylock_toml_from_directory(output_dir), encoding="utf-8")
     return path
 
 
@@ -225,6 +283,7 @@ def materialize_artifact_dependencies(
     start: Path | None = None,
     extras: Sequence[str] = (),
     groups: Sequence[str] = (),
+    extra_dependencies: Sequence[str] = (),
     include_base: bool = True,
     write_lock: bool = True,
 ) -> ArtifactDependencySpec:
@@ -235,19 +294,12 @@ def materialize_artifact_dependencies(
         start=start,
         extras=extras,
         groups=groups,
+        extra_dependencies=extra_dependencies,
         include_base=include_base,
     )
     write_artifact_pyproject(output_dir, spec)
     if write_lock:
-        write_artifact_pylock(
-            output_dir,
-            project_root,
-            pyproject_toml_path=pyproject_toml_path,
-            start=start,
-            extras=extras,
-            groups=groups,
-            include_base=include_base,
-        )
+        write_artifact_pylock(output_dir)
     return spec
 
 

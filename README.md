@@ -76,6 +76,7 @@ handler.save_model(
 | `code_renames` | Rename files in the bundle, e.g. `{"inference_en.py": "inference.py"}` |
 | `dependency_extras` | PEP 621 optional deps from your `pyproject.toml` |
 | `dependency_groups` | uv/poetry dependency groups to merge |
+| `extra_dependencies` | Extra PEP 508 reqs merged last; override same package from groups/extras |
 | `pyproject_toml_path` | Explicit deps manifest (overrides upward search) |
 
 ### Local testing without a full export
