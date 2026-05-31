@@ -2,6 +2,10 @@
 
 Uses PEP 621 ``pyproject.toml`` for declarative metadata and PEP 751
 ``pylock.toml`` (via ``uv export``) for reproducible locked installs.
+
+``uv`` is invoked as an external CLI (``subprocess``). When ``uv`` is not on
+``PATH``, lockfile export is skipped with a warning; ``pyproject.toml`` is still
+written.
 """
 
 from __future__ import annotations
@@ -9,12 +13,20 @@ from __future__ import annotations
 import subprocess
 import sys
 import tomllib
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
 
 _VERSION_SPECIFIER_MARKERS = (">=", "<=", "==", "!=", "~=", ">", "<")
+
+_UV_LOCKFILE_WARNING = (
+    "uv is not available on PATH; skipping pylock.toml export. "
+    "The artifact pyproject.toml was written. Install uv "
+    "(https://docs.astral.sh/uv/) and re-run export, or run "
+    "`uv export --format pylock.toml --directory <bundle_dir>` manually."
+)
 
 
 def normalize_requires_python(requires_python: str) -> str:
@@ -267,11 +279,18 @@ def export_pylock_toml(
     return result.stdout
 
 
-def write_artifact_pylock(output_dir: Path) -> Path:
-    """Write ``pylock.toml`` from the artifact ``pyproject.toml`` in ``output_dir``."""
+def write_artifact_pylock(output_dir: Path) -> Path | None:
+    """Write ``pylock.toml`` from the artifact ``pyproject.toml`` in ``output_dir``.
+
+    Returns the lockfile path, or ``None`` when ``uv`` is not available on ``PATH``.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "pylock.toml"
-    path.write_text(export_pylock_toml_from_directory(output_dir), encoding="utf-8")
+    try:
+        path.write_text(export_pylock_toml_from_directory(output_dir), encoding="utf-8")
+    except FileNotFoundError:
+        warnings.warn(_UV_LOCKFILE_WARNING, stacklevel=2)
+        return None
     return path
 
 
@@ -287,7 +306,11 @@ def materialize_artifact_dependencies(
     include_base: bool = True,
     write_lock: bool = True,
 ) -> ArtifactDependencySpec:
-    """Write ``pyproject.toml`` and optionally ``pylock.toml`` into an artifact directory."""
+    """Write ``pyproject.toml`` and optionally ``pylock.toml`` into an artifact directory.
+
+    When ``write_lock`` is true and ``uv`` is not on ``PATH``, emits a warning and
+    skips ``pylock.toml`` instead of failing export.
+    """
     spec = merge_project_dependencies(
         project_root,
         pyproject_toml_path=pyproject_toml_path,

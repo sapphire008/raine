@@ -2973,7 +2973,6 @@ source = { editable = "." }
 dependencies = [
     { name = "dynaconf" },
     { name = "pyyaml" },
-    { name = "uv" },
 ]
 
 [package.optional-dependencies]
@@ -3000,6 +2999,7 @@ dev = [
     { name = "black" },
     { name = "ipython" },
     { name = "pytest" },
+    { name = "uv" },
 ]
 
 [package.metadata]
@@ -3012,7 +3012,6 @@ requires-dist = [
     { name = "litserve", marker = "extra == 'serve'", specifier = "==0.2.17" },
     { name = "pyyaml", specifier = ">=6.0.0,<7.0.0" },
     { name = "torch", marker = "extra == 'torch'", specifier = "==2.8.0" },
-    { name = "uv", specifier = ">=0.11.17" },
     { name = "webdataset", marker = "extra == 'train'", specifier = "==1.0.2" },
 ]
 provides-extras = ["gcp", "torch", "train", "serve", "data"]
@@ -3022,6 +3021,7 @@ dev = [
     { name = "black", specifier = "==24.4.2" },
     { name = "ipython", specifier = ">=9.14.0" },
     { name = "pytest", specifier = ">=8.2.2" },
+    { name = "uv", specifier = ">=0.11.0,<0.12.0" },
 ]
 
 [[package]]

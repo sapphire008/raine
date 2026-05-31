@@ -326,6 +326,34 @@ def test_save_model_passes_extra_dependencies(tmp_path: Path, monkeypatch: pytes
     assert captured["extra_dependencies"] == ("raine", "litserve==0.2.17")
 
 
+def test_materialize_artifact_dependencies_skips_pylock_when_uv_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from raine.serve.artifacts.deps_trace import materialize_artifact_dependencies
+
+    project_root = Path(__file__).resolve().parents[1]
+
+    def raise_uv_not_found(*args, **kwargs):
+        raise FileNotFoundError("uv")
+
+    monkeypatch.setattr(
+        "raine.serve.artifacts.deps_trace.export_pylock_toml_from_directory",
+        raise_uv_not_found,
+    )
+
+    output_dir = tmp_path / "bundle"
+    with pytest.warns(UserWarning, match="uv is not available"):
+        materialize_artifact_dependencies(
+            output_dir,
+            pyproject_toml_path=project_root / "pyproject.toml",
+            extras=("serve",),
+            include_base=False,
+        )
+
+    assert (output_dir / "pyproject.toml").is_file()
+    assert not (output_dir / "pylock.toml").exists()
+
+
 def test_resolve_dependency_project_prefers_explicit_pyproject() -> None:
     from raine.serve.artifacts.deps_trace import resolve_dependency_project
 

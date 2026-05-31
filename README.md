@@ -18,7 +18,13 @@ pip install "raine[serve]"
 
 For PyTorch handlers, also install the `torch` extra. Other extras (`gcp`, `train`, `data`) cover optional tooling elsewhere in the repo and are not required for model packaging.
 
-`pip install raine` includes **`uv`** as a dependency so `save_model` can write `pylock.toml` during export.
+### Exporting bundles (`save_model`)
+
+`save_model` writes a PEP 751 `pylock.toml` by shelling out to the **`uv` CLI** when it is available. Put the `uv` executable on your **`PATH`** when you export (for example via [uv's standalone installer](https://docs.astral.sh/uv/getting-started/installation/)). It does **not** need to be installed in the same Python environment as `raine` — only the command must be reachable.
+
+If `uv` is missing, export still succeeds: raine writes `pyproject.toml` and emits a **warning** that `pylock.toml` was skipped. Install [`uv`](https://docs.astral.sh/uv/) and re-run export, or run `uv export --format pylock.toml --directory <bundle_dir>` manually against the bundle directory.
+
+You do not need `uv` at all if you use another installer. The artifact `pyproject.toml` is standard PEP 621 — Poetry, pip, pdm, etc. can install from it. A Poetry consumer can run `poetry lock` / `poetry install` in the bundle directory and ignore `pylock.toml` entirely.
 
 ## Model bundles
 
@@ -30,7 +36,7 @@ my_model/
 ├── artifacts/         # weights, configs, and other assets
 ├── artifacts.json     # logical name → bundle path index
 ├── pyproject.toml     # merged runtime dependencies
-└── pylock.toml        # locked dependency export (uv)
+└── pylock.toml        # locked deps (when uv is on PATH; optional)
 ```
 
 At serving time, load the handler with `from_bundle`. In `setup()`, access bundle assets via `self.context.artifacts`, similar to MLflow's `PythonModelContext`.

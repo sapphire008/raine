@@ -84,7 +84,12 @@ class RaineModel:
           and optional ``code_seeds``
         - ``artifacts/`` — copied model assets keyed by ``artifacts``
         - ``artifacts.json`` — logical artifact name to bundle-relative path index
-        - ``pyproject.toml`` and ``pylock.toml`` — PEP 621 / PEP 751 runtime deps
+        - ``pyproject.toml`` — merged PEP 621 runtime deps (always written)
+        - ``pylock.toml`` — PEP 751 lockfile when ``uv`` is on ``PATH`` (optional)
+
+        If ``uv`` is missing, export completes without ``pylock.toml`` and emits a
+        warning. ``uv`` does not need to be installed in the same environment as
+        ``raine`` (see README).
 
         Args:
             output_dir: Destination directory for the artifact bundle.
