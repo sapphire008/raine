@@ -2,9 +2,15 @@
 
 Raine is an MLOps toolkit for the full model lifecycle: data preparation and feature engineering, training pipeline orchestration (Kubeflow), and model serving. The goal is reusable building blocks you can compose across local development and cloud deployment.
 
-**Status:** only **`raine.serve.artifacts`** is implemented and documented today — packaging a LitServe handler, traced local code, model assets, and runtime dependencies into a self-contained bundle. Other areas of the repo are work in progress.
+**Status:** only **`raine.serve.artifacts`** is implemented and documented today — packaging a handler, traced local code, model assets, and runtime dependencies into a self-contained bundle. Other areas of the repo are work in progress.
 
 ## Install
+
+```bash
+pip install raine
+```
+
+Model packaging does not require LitServe. To run a LitServe-based handler, install the optional `serve` extra for convenience:
 
 ```bash
 pip install "raine[serve]"
@@ -29,7 +35,7 @@ At serving time, load the bundle in `setup()` via `ModelContext` and resolve ass
 
 ## Quick start
 
-Define a handler that mixes in `RaineModel` with LitServe:
+`RaineModel` is a mixin — it does not depend on any serving framework. The example below uses LitServe (`pip install "raine[serve]"`); mix it with your own base class instead if you prefer.
 
 ```python
 import litserve as ls

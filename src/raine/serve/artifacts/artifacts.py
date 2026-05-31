@@ -1,14 +1,10 @@
 from __future__ import annotations
 
 import importlib
-from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Mapping, Sequence
 
-from litserve.loops.base import LitLoop
-from litserve.mcp import MCP
-from litserve.specs.base import LitSpec
 
 from raine.serve.artifacts.code_trace import materialize_artifact_code
 from raine.serve.artifacts.context import (
@@ -24,37 +20,6 @@ from raine.serve.artifacts.utils import (
     local_roots_from_seeds,
 )
 
-
-@dataclass
-class LitAPIConfig:
-    """Validated passthrough config for ls.LitAPI constructor kwargs."""
-
-    max_batch_size: int = 1
-    batch_timeout: float = 0.0
-    api_path: str = "/predict"
-    stream: bool = True
-    loop: str | LitLoop | None = "auto"
-    spec: LitSpec | None = None
-    mcp: MCP | None = None
-    enable_async: bool = True
-
-    def __post_init__(self) -> None:
-        if self.max_batch_size < 1:
-            raise ValueError("max_batch_size must be greater than 0")
-        if self.batch_timeout < 0:
-            raise ValueError("batch_timeout must be greater than or equal to 0")
-        if not self.api_path.startswith("/"):
-            raise ValueError("api_path must start with '/'")
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any] | None = None) -> LitAPIConfig:
-        if not data:
-            return cls()
-        valid = {field.name for field in fields(cls)}
-        return cls(**{key: value for key, value in data.items() if key in valid})
-
-    def lit_api_kwargs(self) -> dict[str, Any]:
-        return asdict(self)
 
 
 class RaineModel:
