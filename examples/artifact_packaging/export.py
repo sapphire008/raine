@@ -17,15 +17,20 @@ def main() -> Path:
             "weights": EXAMPLE_ROOT / "trained_model/weights",
         },
         code_renames={
-            "inference.py": "api.py",  # rename code
-        }
+            "inference.py": "api.py",
+        },
     )
-    
-def load(bundle_dir: str | Path):
-    handler = MyInferenceAPI.load_model(bundle_dir)
+
+
+def load(bundle_dir: str | Path) -> MyInferenceAPI:
+    """Load the exported bundle as a LitServe-ready handler (MLflow-style)."""
+    handler = MyInferenceAPI.from_bundle(bundle_dir, max_batch_size=1)
+    set_trace()
+    return handler
 
 
 if __name__ == "__main__":
     bundle_dir = main()
     print(f"Wrote model bundle to {bundle_dir}")
-    load(bundle_dir)
+    api = load(bundle_dir)
+    print(f"Loaded handler: {type(api).__name__}, context={api.context.model_dir}")

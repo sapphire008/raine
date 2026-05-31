@@ -47,14 +47,14 @@ class RaineModel:
         return getattr(module, class_name)
 
     @classmethod
-    def load_model(
+    def from_bundle(
         cls: type[T],
         model_uri: str | Path,
         *args: Any,
         configure_path: bool = True,
         **kwargs: Any,
     ) -> T:
-        """Construct a handler with ``self.context`` bound to a saved bundle."""
+        """Load a saved bundle and return a handler with ``self.context`` bound."""
         instance = cls(*args, **kwargs)
         instance._context = ModelContext.from_uri(
             model_uri,

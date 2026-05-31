@@ -5,8 +5,9 @@ from modules.module import ModelModule
 
 
 class MyInferenceAPI(RaineModel, ls.LitAPI):
-    def __init__(self):
-        super().__init__(max_batch_size=1)
+    def __init__(self, **lit_api_kwargs):
+        lit_api_kwargs.setdefault("max_batch_size", 1)
+        super().__init__(**lit_api_kwargs)
 
     def setup(self, device):
         self.model = ModelModule()
