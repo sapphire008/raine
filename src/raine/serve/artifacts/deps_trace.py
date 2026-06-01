@@ -17,7 +17,7 @@ import tomllib
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Literal, Mapping, Sequence
 
 
 _VERSION_SPECIFIER_MARKERS = (">=", "<=", "==", "!=", "~=", ">", "<")
@@ -29,7 +29,9 @@ _UV_LOCKFILE_WARNING = (
     "`uv export --format pylock.toml --directory <bundle_dir>` manually."
 )
 
-WHEELS_DIR_NAME = "wheels"
+VENDORS_DIR_NAME = "vendors"
+# Backward-compatible alias: wheels are now bundled under vendors/.
+WHEELS_DIR_NAME = VENDORS_DIR_NAME
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,14 @@ class ArtifactDependencySpec:
     requires_python: str = ">=3.11"
     dependencies: tuple[str, ...] = ()
     description: str = "Raine model artifact runtime environment"
+
+
+@dataclass(frozen=True)
+class LocalSourcePath:
+    """Local dependency source path declared in tool-specific tables."""
+
+    package_name: str
+    path: str
 
 
 def normalize_requires_python(requires_python: str) -> str:
@@ -106,20 +116,36 @@ def _file_url_to_path(file_url: str) -> str:
     raise ValueError(f"Not a file URL: {file_url!r}")
 
 
+def _is_wheel_path(path: str) -> bool:
+    return Path(path).suffix.lower() == ".whl"
+
+
+def _is_wheel_file_url(file_url: str) -> bool:
+    return _is_wheel_path(_file_url_to_path(file_url))
+
+
 def _resolve_path_against_roots(
     path: Path,
     *,
     project_root: Path,
     output_dir: Path,
+    expected_kind: Literal["file", "dir", "any"] = "file",
 ) -> Path | None:
     """Resolve ``path`` against ``output_dir`` then ``project_root``."""
+    def _matches(candidate: Path) -> bool:
+        if expected_kind == "file":
+            return candidate.is_file()
+        if expected_kind == "dir":
+            return candidate.is_dir()
+        return candidate.exists()
+
     if path.is_absolute():
         candidate = path.resolve()
-        return candidate if candidate.is_file() else None
+        return candidate if _matches(candidate) else None
 
     for root in (output_dir, project_root):
         candidate = (root / path).resolve()
-        if candidate.is_file():
+        if _matches(candidate):
             return candidate
     return None
 
@@ -129,6 +155,7 @@ def _resolve_file_reference_path(
     *,
     project_root: Path,
     output_dir: Path,
+    expected_kind: Literal["file", "dir", "any"] = "file",
 ) -> Path:
     """Resolve a ``file:`` URL from a requirement to an existing file path."""
     raw_path = Path(_file_url_to_path(file_url))
@@ -136,6 +163,7 @@ def _resolve_file_reference_path(
         raw_path,
         project_root=project_root,
         output_dir=output_dir,
+        expected_kind=expected_kind,
     )
     if resolved is None:
         raise FileNotFoundError(
@@ -145,17 +173,52 @@ def _resolve_file_reference_path(
     return resolved
 
 
-def _read_uv_wheel_source_paths(metadata: dict) -> dict[str, str]:
-    """Return normalized package name → path for ``[tool.uv.sources]`` wheel paths."""
+def _read_uv_source_paths(metadata: dict) -> dict[str, LocalSourcePath]:
+    """Return normalized package name → local path for ``[tool.uv.sources]``."""
     sources = metadata.get("tool", {}).get("uv", {}).get("sources", {})
-    paths: dict[str, str] = {}
+    paths: dict[str, LocalSourcePath] = {}
     for name, spec in sources.items():
         if not isinstance(spec, dict):
             continue
         path = spec.get("path")
-        if isinstance(path, str) and path.endswith(".whl"):
-            paths[_requirement_key(name)] = path
+        if isinstance(path, str):
+            package_name = str(name).strip()
+            paths[_requirement_key(package_name)] = LocalSourcePath(
+                package_name=package_name,
+                path=path,
+            )
     return paths
+
+
+def _read_poetry_source_paths(metadata: dict) -> dict[str, LocalSourcePath]:
+    """Return normalized package name → local path from ``[tool.poetry.dependencies]``."""
+    dependencies = metadata.get("tool", {}).get("poetry", {}).get("dependencies", {})
+    paths: dict[str, LocalSourcePath] = {}
+    for name, spec in dependencies.items():
+        if str(name).lower() == "python" or not isinstance(spec, dict):
+            continue
+        path = spec.get("path")
+        if isinstance(path, str):
+            package_name = str(name).strip()
+            paths[_requirement_key(package_name)] = LocalSourcePath(
+                package_name=package_name,
+                path=path,
+            )
+    return paths
+
+
+def _split_local_source_paths(
+    sources: Mapping[str, LocalSourcePath],
+) -> tuple[dict[str, LocalSourcePath], dict[str, LocalSourcePath]]:
+    """Split source-path declarations into wheel and directory maps."""
+    wheels: dict[str, LocalSourcePath] = {}
+    directories: dict[str, LocalSourcePath] = {}
+    for key, source in sources.items():
+        if _is_wheel_path(source.path):
+            wheels[key] = source
+        else:
+            directories[key] = source
+    return wheels, directories
 
 
 def _copy_wheel_to_bundle(
@@ -185,7 +248,186 @@ def _bundle_wheel_requirement(
     copied: dict[Path, str],
 ) -> str:
     wheel_name = _copy_wheel_to_bundle(source_wheel, wheels_dir, copied=copied)
-    return f"{package_name} @ file:./{WHEELS_DIR_NAME}/{wheel_name}"
+    return f"{package_name} @ file:./{VENDORS_DIR_NAME}/{wheel_name}"
+
+
+def _copy_vendor_to_bundle(
+    source_dir: Path,
+    vendors_dir: Path,
+    *,
+    package_name: str,
+    copied: dict[Path, str],
+    destinations: dict[str, Path],
+) -> str:
+    """Copy a local source package into ``vendors/`` and return its folder name."""
+    resolved_source = source_dir.resolve()
+    if resolved_source in copied:
+        return copied[resolved_source]
+
+    vendor_name = _requirement_key(package_name)
+    existing_source = destinations.get(vendor_name)
+    if existing_source is not None and existing_source != resolved_source:
+        raise ValueError(
+            f"Vendor path collision for {vendor_name!r}: "
+            f"{existing_source} and {resolved_source}"
+        )
+
+    destination = vendors_dir / vendor_name
+    if destination.exists() or destination.is_symlink():
+        if destination.is_dir() and not destination.is_symlink():
+            shutil.rmtree(destination)
+        else:
+            destination.unlink()
+
+    vendors_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        resolved_source,
+        destination,
+        ignore=shutil.ignore_patterns(".git", "__pycache__", ".venv"),
+    )
+    copied[resolved_source] = vendor_name
+    destinations[vendor_name] = resolved_source
+    return vendor_name
+
+
+def _bundle_vendor_requirement(
+    package_name: str,
+    source_dir: Path,
+    vendors_dir: Path,
+    *,
+    copied: dict[Path, str],
+    destinations: dict[str, Path],
+) -> str:
+    vendor_name = _copy_vendor_to_bundle(
+        source_dir,
+        vendors_dir,
+        package_name=package_name,
+        copied=copied,
+        destinations=destinations,
+    )
+    return f"{package_name} @ file:./{VENDORS_DIR_NAME}/{vendor_name}"
+
+
+def bundle_local_vendors(
+    spec: ArtifactDependencySpec,
+    output_dir: Path,
+    *,
+    project_root: Path,
+    metadata: dict,
+) -> ArtifactDependencySpec:
+    """Copy local source-directory dependencies into ``output_dir/vendors``."""
+    vendors_dir = output_dir / VENDORS_DIR_NAME
+    copied: dict[Path, str] = {}
+    destinations: dict[str, Path] = {}
+
+    uv_sources = _read_uv_source_paths(metadata)
+    poetry_sources = _read_poetry_source_paths(metadata)
+    combined_sources = {**poetry_sources, **uv_sources}
+    _, source_dirs = _split_local_source_paths(combined_sources)
+
+    dependency_keys = {_requirement_key(requirement) for requirement in spec.dependencies}
+    handled_keys: set[str] = set()
+    bundled_dependencies: list[str] = []
+
+    for requirement in spec.dependencies:
+        direct = _parse_direct_file_reference(requirement)
+        if direct is not None:
+            package_name, file_url = direct
+            if _is_wheel_file_url(file_url):
+                bundled_dependencies.append(requirement)
+                continue
+
+            try:
+                source_dir = _resolve_file_reference_path(
+                    file_url,
+                    project_root=project_root,
+                    output_dir=output_dir,
+                    expected_kind="dir",
+                )
+            except FileNotFoundError as exc:
+                raise FileNotFoundError(
+                    f"Local source dependency not found for {package_name!r}: "
+                    f"{file_url!r} (searched under {output_dir} and {project_root})"
+                ) from exc
+            if (
+                source_dir.parent == vendors_dir.resolve()
+                and file_url.startswith(f"file:./{VENDORS_DIR_NAME}/")
+            ):
+                bundled_dependencies.append(requirement)
+                handled_keys.add(_requirement_key(package_name))
+                continue
+            handled_keys.add(_requirement_key(package_name))
+            bundled_dependencies.append(
+                _bundle_vendor_requirement(
+                    package_name,
+                    source_dir,
+                    vendors_dir,
+                    copied=copied,
+                    destinations=destinations,
+                )
+            )
+            continue
+
+        key = _requirement_key(requirement)
+        source = source_dirs.get(key)
+        if source is None:
+            bundled_dependencies.append(requirement)
+            continue
+
+        source_dir = _resolve_path_against_roots(
+            Path(source.path),
+            project_root=project_root,
+            output_dir=output_dir,
+            expected_kind="dir",
+        )
+        if source_dir is None:
+            raise FileNotFoundError(
+                f"Local source dependency not found for {source.package_name!r}: "
+                f"{source.path!r} (searched under {output_dir} and {project_root})"
+            )
+        handled_keys.add(key)
+        bundled_dependencies.append(
+            _bundle_vendor_requirement(
+                _package_name_from_requirement(requirement),
+                source_dir,
+                vendors_dir,
+                copied=copied,
+                destinations=destinations,
+            )
+        )
+
+    # Poetry path dependencies may not appear in PEP 621 [project.dependencies].
+    for key, source in source_dirs.items():
+        if key in dependency_keys or key in handled_keys:
+            continue
+        source_dir = _resolve_path_against_roots(
+            Path(source.path),
+            project_root=project_root,
+            output_dir=output_dir,
+            expected_kind="dir",
+        )
+        if source_dir is None:
+            raise FileNotFoundError(
+                f"Local source dependency not found for {source.package_name!r}: "
+                f"{source.path!r} (searched under {output_dir} and {project_root})"
+            )
+        bundled_dependencies.append(
+            _bundle_vendor_requirement(
+                source.package_name,
+                source_dir,
+                vendors_dir,
+                copied=copied,
+                destinations=destinations,
+            )
+        )
+
+    return ArtifactDependencySpec(
+        name=spec.name,
+        version=spec.version,
+        requires_python=spec.requires_python,
+        dependencies=tuple(bundled_dependencies),
+        description=spec.description,
+    )
 
 
 def bundle_local_wheels(
@@ -195,27 +437,29 @@ def bundle_local_wheels(
     project_root: Path,
     metadata: dict,
 ) -> ArtifactDependencySpec:
-    """Copy local ``.whl`` references into ``output_dir/wheels`` and rewrite deps."""
-    wheels_dir = output_dir / WHEELS_DIR_NAME
+    """Copy local ``.whl`` references into ``output_dir/vendors`` and rewrite deps."""
+    wheels_dir = output_dir / VENDORS_DIR_NAME
     copied: dict[Path, str] = {}
-    uv_sources = _read_uv_wheel_source_paths(metadata)
+    uv_sources = _read_uv_source_paths(metadata)
+    poetry_sources = _read_poetry_source_paths(metadata)
+    wheel_sources, _ = _split_local_source_paths({**poetry_sources, **uv_sources})
     bundled_dependencies: list[str] = []
 
     for requirement in spec.dependencies:
         direct = _parse_direct_file_reference(requirement)
         if direct is not None:
             package_name, file_url = direct
+            if not _is_wheel_file_url(file_url):
+                bundled_dependencies.append(requirement)
+                continue
             source_wheel = _resolve_file_reference_path(
                 file_url,
                 project_root=project_root,
                 output_dir=output_dir,
             )
-            if source_wheel.suffix != ".whl":
-                bundled_dependencies.append(requirement)
-                continue
             if (
                 source_wheel.parent == wheels_dir.resolve()
-                and file_url.startswith(f"file:./{WHEELS_DIR_NAME}/")
+                and file_url.startswith(f"file:./{VENDORS_DIR_NAME}/")
             ):
                 bundled_dependencies.append(requirement)
                 continue
@@ -229,21 +473,22 @@ def bundle_local_wheels(
             )
             continue
 
-        source_path = uv_sources.get(_requirement_key(requirement))
-        if source_path is not None:
+        source = wheel_sources.get(_requirement_key(requirement))
+        if source is not None:
             source_wheel = _resolve_path_against_roots(
-                Path(source_path),
+                Path(source.path),
                 project_root=project_root,
                 output_dir=output_dir,
             )
             if source_wheel is None:
                 raise FileNotFoundError(
-                    f"[tool.uv.sources] wheel not found for {_requirement_key(requirement)!r}: "
-                    f"{source_path!r} (searched under {output_dir} and {project_root})"
+                    f"Local wheel source not found for {_requirement_key(requirement)!r}: "
+                    f"{source.path!r} (searched under {output_dir} and {project_root})"
                 )
             bundled_dependencies.append(
                 _bundle_wheel_requirement(
-                    _package_name_from_requirement(requirement),
+                    _package_name_from_requirement(requirement)
+                    or source.package_name,
                     source_wheel,
                     wheels_dir,
                     copied=copied,
@@ -508,9 +753,10 @@ def materialize_artifact_dependencies(
     When ``write_lock`` is true and ``uv`` is not on ``PATH``, emits a warning and
     skips ``pylock.toml`` instead of failing export.
 
-    Local wheel references (PEP 508 ``@ file:...`` or ``[tool.uv.sources]`` paths
-    ending in ``.whl``) are copied into ``wheels/`` and rewritten as portable
-    ``file:./wheels/<name>.whl`` requirements in the artifact ``pyproject.toml``.
+    Local source directories are copied into ``vendors/`` and rewritten as
+    ``file:./vendors/<name>`` requirements. Local wheel references (PEP 508
+    ``@ file:...`` or source-table ``path`` values ending in ``.whl``) are also
+    copied into ``vendors/`` and rewritten as ``file:./vendors/<name>.whl``.
     """
     resolved_root, resolved_pyproject = resolve_dependency_project(
         project_root=project_root,
@@ -526,6 +772,12 @@ def materialize_artifact_dependencies(
         groups=groups,
         extra_dependencies=extra_dependencies,
         include_base=include_base,
+    )
+    spec = bundle_local_vendors(
+        spec,
+        output_dir,
+        project_root=resolved_root,
+        metadata=metadata,
     )
     spec = bundle_local_wheels(
         spec,

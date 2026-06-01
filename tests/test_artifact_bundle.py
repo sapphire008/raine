@@ -106,7 +106,6 @@ def test_model_context_from_uri_resolves_artifacts(tmp_path: Path, monkeypatch: 
 
 
 def test_save_model_writes_bundle_layout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    project_root = Path(__file__).resolve().parents[1]
     weights = tmp_path / "weights.pt"
     config = tmp_path / "config.json"
     weights.write_text("weights", encoding="utf-8")
@@ -179,7 +178,6 @@ def test_save_model_writes_bundle_layout(tmp_path: Path, monkeypatch: pytest.Mon
 
 
 def test_save_model_passes_dependency_groups(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    project_root = Path(__file__).resolve().parents[1]
     output_dir = tmp_path / "model-bundle"
     weights = tmp_path / "weights.pt"
     weights.write_text("weights", encoding="utf-8")
@@ -505,9 +503,9 @@ def test_bundle_local_wheels_from_file_url(tmp_path: Path) -> None:
         write_lock=False,
     )
 
-    assert spec.dependencies == (f"music-tokenizer @ file:./wheels/{wheel_name}",)
-    assert (output_dir / "wheels" / wheel_name).read_bytes() == b"wheel-payload"
-    assert f'file:./wheels/{wheel_name}' in (output_dir / "pyproject.toml").read_text(
+    assert spec.dependencies == (f"music-tokenizer @ file:./vendors/{wheel_name}",)
+    assert (output_dir / "vendors" / wheel_name).read_bytes() == b"wheel-payload"
+    assert f'file:./vendors/{wheel_name}' in (output_dir / "pyproject.toml").read_text(
         encoding="utf-8"
     )
 
@@ -542,8 +540,8 @@ music-tokenizer = {{ path = "./dist/{wheel_name}" }}
         write_lock=False,
     )
 
-    assert spec.dependencies == (f"music-tokenizer @ file:./wheels/{wheel_name}",)
-    assert (output_dir / "wheels" / wheel_name).is_file()
+    assert spec.dependencies == (f"music-tokenizer @ file:./vendors/{wheel_name}",)
+    assert (output_dir / "vendors" / wheel_name).is_file()
 
 
 def test_bundle_local_wheels_from_project_dependencies(tmp_path: Path) -> None:
@@ -575,8 +573,8 @@ dependencies = [
         write_lock=False,
     )
 
-    assert spec.dependencies == (f"music-tokenizer @ file:./wheels/{wheel_name}",)
-    assert (output_dir / "wheels" / wheel_name).is_file()
+    assert spec.dependencies == (f"music-tokenizer @ file:./vendors/{wheel_name}",)
+    assert (output_dir / "vendors" / wheel_name).is_file()
 
 
 def test_bundle_local_wheels_keeps_already_bundled_reference(tmp_path: Path) -> None:
@@ -590,11 +588,11 @@ def test_bundle_local_wheels_keeps_already_bundled_reference(tmp_path: Path) -> 
     project_root.mkdir()
     output_dir = tmp_path / "bundle"
     wheel_name = "music_tokenizer-0.3.0-py3-none-any.whl"
-    wheels_dir = output_dir / "wheels"
+    wheels_dir = output_dir / "vendors"
     wheels_dir.mkdir(parents=True)
     (wheels_dir / wheel_name).write_bytes(b"wheel-payload")
 
-    bundled_req = f"music-tokenizer @ file:./wheels/{wheel_name}"
+    bundled_req = f"music-tokenizer @ file:./vendors/{wheel_name}"
     spec = bundle_local_wheels(
         ArtifactDependencySpec(name="demo-artifact", dependencies=(bundled_req,)),
         output_dir,
@@ -624,6 +622,192 @@ def test_bundle_local_wheels_missing_file_raises(tmp_path: Path) -> None:
             project_root,
             include_base=False,
             extra_dependencies=("music-tokenizer @ file:./dist/missing.whl",),
+            write_lock=False,
+        )
+
+
+def test_bundle_local_vendors_from_file_url_dir(tmp_path: Path) -> None:
+    from raine.serve.artifacts.deps_trace import materialize_artifact_dependencies
+
+    project_root = tmp_path / "project"
+    package_root = project_root / "music-tokenizer"
+    package_module = package_root / "music_tokenizer"
+    package_module.mkdir(parents=True)
+    (package_root / "pyproject.toml").write_text(
+        '[project]\nname = "music-tokenizer"\nversion = "0.3.0"\n',
+        encoding="utf-8",
+    )
+    (package_module / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+
+    _write_minimal_pyproject(project_root / "pyproject.toml")
+    output_dir = tmp_path / "bundle"
+    spec = materialize_artifact_dependencies(
+        output_dir,
+        project_root,
+        include_base=False,
+        extra_dependencies=("music-tokenizer @ file:./music-tokenizer",),
+        write_lock=False,
+    )
+
+    assert spec.dependencies == ("music-tokenizer @ file:./vendors/music-tokenizer",)
+    assert (output_dir / "vendors/music-tokenizer/pyproject.toml").is_file()
+
+
+def test_bundle_local_vendors_from_uv_sources_dir(tmp_path: Path) -> None:
+    from raine.serve.artifacts.deps_trace import materialize_artifact_dependencies
+
+    project_root = tmp_path / "project"
+    package_root = project_root / "music-tokenizer"
+    package_module = package_root / "music_tokenizer"
+    package_module.mkdir(parents=True)
+    (package_root / "pyproject.toml").write_text(
+        '[project]\nname = "music-tokenizer"\nversion = "0.3.0"\n',
+        encoding="utf-8",
+    )
+    (package_module / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+
+    (project_root / "pyproject.toml").write_text(
+        """\
+[project]
+name = "demo"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["music-tokenizer"]
+
+[tool.uv.sources]
+music-tokenizer = { path = "./music-tokenizer", editable = true }
+""",
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "bundle"
+    spec = materialize_artifact_dependencies(
+        output_dir,
+        project_root,
+        write_lock=False,
+    )
+
+    assert spec.dependencies == ("music-tokenizer @ file:./vendors/music-tokenizer",)
+    assert (output_dir / "vendors/music-tokenizer/music_tokenizer/__init__.py").is_file()
+
+
+def test_bundle_local_vendors_from_poetry_path(tmp_path: Path) -> None:
+    from raine.serve.artifacts.deps_trace import materialize_artifact_dependencies
+
+    project_root = tmp_path / "project"
+    package_root = project_root / "music-tokenizer"
+    package_module = package_root / "music_tokenizer"
+    package_module.mkdir(parents=True)
+    (package_root / "pyproject.toml").write_text(
+        '[project]\nname = "music-tokenizer"\nversion = "0.3.0"\n',
+        encoding="utf-8",
+    )
+    (package_module / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+
+    (project_root / "pyproject.toml").write_text(
+        """\
+[project]
+name = "demo"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"
+music-tokenizer = { path = "./music-tokenizer", develop = true }
+""",
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "bundle"
+    spec = materialize_artifact_dependencies(
+        output_dir,
+        project_root,
+        write_lock=False,
+    )
+
+    assert spec.dependencies == ("music-tokenizer @ file:./vendors/music-tokenizer",)
+    assert (output_dir / "vendors/music-tokenizer/music_tokenizer/__init__.py").is_file()
+
+
+def test_poetry_path_to_wheel_uses_wheels(tmp_path: Path) -> None:
+    from raine.serve.artifacts.deps_trace import materialize_artifact_dependencies
+
+    project_root = tmp_path / "project"
+    dist = project_root / "dist"
+    dist.mkdir(parents=True)
+    wheel_name = "music_tokenizer-0.3.0-py3-none-any.whl"
+    (dist / wheel_name).write_bytes(b"wheel-payload")
+
+    (project_root / "pyproject.toml").write_text(
+        f"""\
+[project]
+name = "demo"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["music-tokenizer"]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"
+music-tokenizer = {{ path = "./dist/{wheel_name}" }}
+""",
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "bundle"
+    spec = materialize_artifact_dependencies(
+        output_dir,
+        project_root,
+        write_lock=False,
+    )
+
+    assert spec.dependencies == (f"music-tokenizer @ file:./vendors/{wheel_name}",)
+    assert (output_dir / "vendors" / wheel_name).is_file()
+
+
+def test_bundle_local_vendors_keeps_already_bundled_reference(tmp_path: Path) -> None:
+    from raine.serve.artifacts.deps_trace import (
+        ArtifactDependencySpec,
+        bundle_local_vendors,
+        read_project_metadata_at,
+    )
+
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    output_dir = tmp_path / "bundle"
+    vendor_name = "music-tokenizer"
+    vendor_dir = output_dir / "vendors" / vendor_name
+    package_module = vendor_dir / "music_tokenizer"
+    package_module.mkdir(parents=True)
+    (vendor_dir / "pyproject.toml").write_text(
+        '[project]\nname = "music-tokenizer"\nversion = "0.3.0"\n',
+        encoding="utf-8",
+    )
+    (package_module / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+
+    bundled_req = f"music-tokenizer @ file:./vendors/{vendor_name}"
+    spec = bundle_local_vendors(
+        ArtifactDependencySpec(name="demo-artifact", dependencies=(bundled_req,)),
+        output_dir,
+        project_root=project_root,
+        metadata=read_project_metadata_at(
+            _write_minimal_pyproject(project_root / "pyproject.toml")
+        ),
+    )
+
+    assert spec.dependencies == (bundled_req,)
+    assert (vendor_dir / "music_tokenizer/__init__.py").is_file()
+
+
+def test_bundle_local_vendors_missing_dir_raises(tmp_path: Path) -> None:
+    from raine.serve.artifacts.deps_trace import materialize_artifact_dependencies
+
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    _write_minimal_pyproject(project_root / "pyproject.toml")
+
+    with pytest.raises(FileNotFoundError, match="Local source dependency not found"):
+        materialize_artifact_dependencies(
+            tmp_path / "bundle",
+            project_root,
+            include_base=False,
+            extra_dependencies=("music-tokenizer @ file:./music-tokenizer",),
             write_lock=False,
         )
 

@@ -86,8 +86,9 @@ class RaineModel:
         - ``artifacts/`` — copied model assets keyed by ``artifacts``
         - ``artifacts.json`` — logical artifact name to bundle-relative path index
         - ``pyproject.toml`` — merged PEP 621 runtime deps (always written)
-        - ``wheels/`` — local ``.whl`` files copied from ``@ file:...`` or
-          ``[tool.uv.sources]`` references (when present)
+        - ``vendors/`` — local source dependencies copied from ``@ file:...`` or
+          source-table ``path`` entries when they point to directories
+          and local ``.whl`` files copied from ``@ file:...`` or source-table paths
         - ``pylock.toml`` — PEP 751 lockfile when ``uv`` is on ``PATH`` (optional)
 
         If ``uv`` is missing, export completes without ``pylock.toml`` and emits a
@@ -114,7 +115,8 @@ class RaineModel:
             extra_dependencies: Additional PEP 508 requirements merged last into
                 the artifact environment. When a package name matches an entry
                 from base/extras/groups, the ``extra_dependencies`` value wins.
-                Local ``@ file:...`` wheel references are copied into ``wheels/``.
+                Local ``@ file:...`` source directories are copied into
+                ``vendors/``; local wheel references are also copied into ``vendors/``.
             include_base: When ``False``, omit ``[project].dependencies`` from
                 the source ``pyproject.toml`` and merge only ``dependency_extras``,
                 ``dependency_groups``, and ``extra_dependencies``. Useful when
