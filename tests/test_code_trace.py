@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from raine.serve.artifacts.code_trace import (
+    _parse_imports,
     collect_local_modules,
     copy_local_code_paths,
     materialize_artifact_code,
@@ -85,3 +86,23 @@ def test_copy_local_code_paths_renames_bundle_relative_paths(
     assert not (code_root / "inference_en.py").exists()
     assert (code_root / "models.py").is_file()
     assert result.files == (code_root / "inference.py", code_root / "models.py")
+
+
+def test_parse_imports_includes_from_import_submodule_candidates(tmp_path: Path) -> None:
+    pkg = tmp_path / "samplepkg"
+    pkg.mkdir()
+    module_path = pkg / "api.py"
+    module_path.write_text(
+        "from samplepkg.submodule import thing\n"
+        "from .helpers import util\n"
+        "from . import sibling\n",
+        encoding="utf-8",
+    )
+
+    imports = _parse_imports(module_path, "samplepkg.api")
+
+    assert "samplepkg.submodule" in imports
+    assert "samplepkg.submodule.thing" in imports
+    assert "samplepkg.helpers" in imports
+    assert "samplepkg.helpers.util" in imports
+    assert "samplepkg.sibling" in imports

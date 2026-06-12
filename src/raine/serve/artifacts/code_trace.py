@@ -36,7 +36,10 @@ def is_stdlib_module(module_name: str) -> bool:
 
 
 def module_file_path(module_name: str) -> Path | None:
-    spec = importlib.util.find_spec(module_name)
+    try:
+        spec = importlib.util.find_spec(module_name)
+    except (ModuleNotFoundError, AttributeError, ValueError):
+        return None
     if spec is None or spec.origin in (None, "built-in", "frozen"):
         return None
     origin = Path(spec.origin)
@@ -121,10 +124,21 @@ def _parse_imports(source_path: Path, module_name: str) -> set[str]:
                 parts = module_name.split(".")
                 package = ".".join(parts[: max(len(parts) - node.level, 0)])
                 if node.module:
-                    imports.add(f"{package}.{node.module}".lstrip("."))
+                    base = f"{package}.{node.module}".lstrip(".")
+                    imports.add(base)
+                    for alias in node.names:
+                        if alias.name != "*":
+                            imports.add(f"{base}.{alias.name}")
+                else:
+                    for alias in node.names:
+                        if alias.name != "*":
+                            imports.add(f"{package}.{alias.name}".lstrip("."))
                 continue
             if node.module:
                 imports.add(node.module)
+                for alias in node.names:
+                    if alias.name != "*":
+                        imports.add(f"{node.module}.{alias.name}")
 
     return imports
 
